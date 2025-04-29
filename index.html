@@ -360,6 +360,26 @@
             margin-bottom: 20px;
         }
 
+        /* Notification styles */
+        #notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: var(--primary);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+        }
+
+        .data-management {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
         @media (max-width: 768px) {
             .header-content {
                 flex-direction: column;
@@ -489,6 +509,15 @@
                 </div>
             </div>
             
+            <div class="data-management">
+                <button class="btn btn-secondary" id="export-data">
+                    <i class="fas fa-file-export"></i> Export Data
+                </button>
+                <button class="btn btn-secondary" id="clear-data">
+                    <i class="fas fa-trash-alt"></i> Clear All Data
+                </button>
+            </div>
+            
             <div id="projects-table-container">
                 <div class="empty-state">
                     <i class="fas fa-folder-open"></i>
@@ -502,6 +531,11 @@
                 <!-- Pagination buttons will be added dynamically -->
             </div>
         </div>
+    </div>
+    
+    <!-- Notification element -->
+    <div id="notification" style="display: none;">
+        <span id="notification-message">Data saved successfully!</span>
     </div>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -664,6 +698,8 @@
         const downloadTemplateBtn = document.getElementById('download-template');
         const projectsTableContainer = document.getElementById('projects-table-container');
         const paginationContainer = document.getElementById('pagination');
+        const exportDataBtn = document.getElementById('export-data');
+        const clearDataBtn = document.getElementById('clear-data');
 
         // Statistics elements
         const totalProjectsElement = document.getElementById('total-projects');
@@ -671,14 +707,53 @@
         const completedElement = document.getElementById('completed');
         const delayedElement = document.getElementById('delayed');
         
-        // Event Listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            resetFiltersBtn.addEventListener('click', resetFilters);
-            applyFiltersBtn.addEventListener('click', applyFilters);
-            loadSampleBtn.addEventListener('click', loadSampleData);
-            excelUpload.addEventListener('change', handleExcelUpload);
-            downloadTemplateBtn.addEventListener('click', downloadTemplate);
-        });
+        // Functions to save and load data from localStorage
+        function saveProjectsToLocalStorage(projects) {
+            try {
+                localStorage.setItem('indiaProjectsData', JSON.stringify(projects));
+                showNotification('Data saved successfully!');
+            } catch (error) {
+                console.error('Error saving to localStorage:', error);
+                if (error.name === 'QuotaExceededError') {
+                    showNotification('Storage limit exceeded. Some data may not be saved.', 'error');
+                } else {
+                    showNotification('Error saving data. Please try again.', 'error');
+                }
+            }
+        }
+
+        function loadProjectsFromLocalStorage() {
+            const savedData = localStorage.getItem('indiaProjectsData');
+            return savedData ? JSON.parse(savedData) : null;
+        }
+
+        // Function to show notifications to the user
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const notificationMessage = document.getElementById('notification-message');
+            
+            // Set message
+            notificationMessage.textContent = message;
+            
+            // Set background color based on type
+            if (type === 'success') {
+                notification.style.backgroundColor = 'var(--primary)';
+            } else if (type === 'error') {
+                notification.style.backgroundColor = '#e53935';
+            } else if (type === 'warning') {
+                notification.style.backgroundColor = '#fb8c00';
+            } else if (type === 'info') {
+                notification.style.backgroundColor = 'var(--secondary)';
+            }
+            
+            // Show notification
+            notification.style.display = 'block';
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
         
         // Functions
         function resetFilters() {
@@ -759,11 +834,17 @@
         
         function loadSampleData() {
             allProjects = [...sampleData];
+            
+            // Save to localStorage
+            saveProjectsToLocalStorage(allProjects);
+            
             filteredProjects = [...allProjects];
             currentPage = 1;
             renderProjects();
             updatePagination();
             updateStats();
+            
+            showNotification('Sample data loaded successfully!');
         }
         
         function handleExcelUpload(event) {
@@ -772,30 +853,51 @@
             
             const reader = new FileReader();
             reader.onload = function(e) {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                
-                // Process the data to match our expected format
-                allProjects = jsonData.map((row, index) => {
-                    return {
-                        id: index + 1,
-                        projectName: row['Project Name'] || 'Unknown Project',
-                        companyName: row['Company Name'] || 'Unknown Company',
-                        companyLocation: row['Company Location'] || 'Unknown Location',
-                        budget: parseFloat(row['Budget (Cr ₹)']) || 0,
-                        siteLocation: row['Site Location'] || 'Unknown Location',
-                        status: row['Status'] || 'Unknown'
-                    };
-                });
-                
-                filteredProjects = [...allProjects];
-                currentPage = 1;
-                renderProjects();
-                updatePagination();
-                updateStats();
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    if (jsonData.length === 0) {
+                        showNotification('The uploaded file contains no data.', 'warning');
+                        return;
+                    }
+                    
+                    // Process the data to match our expected format
+                    allProjects = jsonData.map((row, index) => {
+                        return {
+                            id: index + 1,
+                            projectName: row['Project Name'] || 'Unknown Project',
+                            companyName: row['Company Name'] || 'Unknown Company',
+                            companyLocation: row['Company Location'] || 'Unknown Location',
+                            budget: parseFloat(row['Budget (Cr ₹)']) || 0,
+                            siteLocation: row['Site Location'] || 'Unknown Location',
+                            status: row['Status'] || 'Unknown'
+                        };
+                    });
+                    
+                    // Save to localStorage
+                    saveProjectsToLocalStorage(allProjects);
+                    
+                    filteredProjects = [...allProjects];
+                    currentPage = 1;
+                    renderProjects();
+                    updatePagination();
+                    updateStats();
+                    
+                    // Reset file input to allow selecting the same file again
+                    excelUpload.value = '';
+                    
+                    showNotification(`Successfully loaded ${allProjects.length} projects!`);
+                } catch (error) {
+                    console.error('Error processing Excel file:', error);
+                    showNotification('Error processing the file. Please check the format.', 'error');
+                }
+            };
+            reader.onerror = function() {
+                showNotification('Error reading the file. Please try again.', 'error');
             };
             reader.readAsArrayBuffer(file);
         }
@@ -804,132 +906,62 @@
             // Create a template workbook
             const templateData = [
                 {
-                    'Project Name': 'Example Project',
-                    'Company Name': 'Example Company',
-                    'Company Location': 'Mumbai, Maharashtra',
-                    'Budget (Cr ₹)': 100,
-                    'Site Location': 'Delhi',
+                    'Project Name': 'Example Project Name',
+                    'Company Name': 'Example Company Name',
+                    'Company Location': 'City, State',
+                    'Budget (Cr ₹)': 100.00,
+                    'Site Location': 'Project Site Location',
                     'Status': 'In Progress'
                 }
             ];
             
-            const workbook = XLSX.utils.book_new();
-            const worksheet = XLSX.utils.json_to_sheet(templateData);
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Projects');
-            XLSX.writeFile(workbook, 'india-projects-tracker-template.xlsx');
+            const ws = XLSX.utils.json_to_sheet(templateData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Project Data Template');
+            
+            // Generate and download the file
+            XLSX.writeFile(wb, 'india_projects_tracker_template.xlsx');
         }
         
-        function renderProjects() {
-            if (filteredProjects.length === 0) {
-                projectsTableContainer.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-search"></i>
-                        <h3>No Projects Found</h3>
-                        <p>Try adjusting your filters or upload a new dataset</p>
-                        <button class="btn btn-primary" id="reset-search">Reset Search</button>
-                    </div>
-                `;
-                
-                document.getElementById('reset-search').addEventListener('click', resetFilters);
+        function exportData() {
+            if (allProjects.length === 0) {
+                showNotification('No data to export', 'warning');
                 return;
             }
             
-            // Calculate start and end indices for pagination
-            const startIndex = (currentPage - 1) * projectsPerPage;
-            const endIndex = Math.min(startIndex + projectsPerPage, filteredProjects.length);
-            const currentProjects = filteredProjects.slice(startIndex, endIndex);
-            
-            let tableHTML = `
-                <table class="project-table">
-                    <thead>
-                        <tr>
-                            <th>Project Name</th>
-                            <th>Company</th>
-                            <th>Company Location</th>
-                            <th>Budget (Cr ₹)</th>
-                            <th>Site Location</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            currentProjects.forEach(project => {
-                let statusClass = '';
-                switch(project.status) {
-                    case 'Completed':
-                        statusClass = 'status-completed';
-                        break;
-                    case 'In Progress':
-                        statusClass = 'status-in-progress';
-                        break;
-                    case 'Planning':
-                        statusClass = 'status-planning';
-                        break;
-                    case 'Delayed':
-                        statusClass = 'status-delayed';
-                        break;
-                }
-                
-                tableHTML += `
-                    <tr>
-                        <td>${project.projectName}</td>
-                        <td>${project.companyName}</td>
-                        <td>${project.companyLocation}</td>
-                        <td>${project.budget.toFixed(2)}</td>
-                        <td>${project.siteLocation}</td>
-                        <td><span class="status ${statusClass}">${project.status}</span></td>
-                    </tr>
-                `;
+            // Format data for Excel export
+            const exportData = allProjects.map(project => {
+                return {
+                    'Project Name': project.projectName,
+                    'Company Name': project.companyName,
+                    'Company Location': project.companyLocation,
+                    'Budget (Cr ₹)': project.budget,
+                    'Site Location': project.siteLocation,
+                    'Status': project.status
+                };
             });
             
-            tableHTML += `
-                    </tbody>
-                </table>
-            `;
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'India Projects Data');
             
-            projectsTableContainer.innerHTML = tableHTML;
+            // Generate and download the file
+            XLSX.writeFile(wb, 'india_projects_data_export.xlsx');
+            
+            showNotification('Data exported successfully!');
         }
         
-        function updatePagination() {
-            if (filteredProjects.length === 0) {
-                paginationContainer.innerHTML = '';
-                return;
+        function clearAllData() {
+            if (confirm('Are you sure you want to clear all project data? This action cannot be undone.')) {
+                allProjects = [];
+                filteredProjects = [];
+                localStorage.removeItem('indiaProjectsData');
+                renderProjects();
+                updatePagination();
+                updateStats();
+                
+                showNotification('All data has been cleared');
             }
-            
-            const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
-            
-            let paginationHTML = '';
-            
-            // Previous button
-            paginationHTML += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})"><i class="fas fa-chevron-left"></i></button>`;
-            
-            // Page numbers
-            const maxVisiblePages = 5;
-            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-            if (endPage - startPage + 1 < maxVisiblePages) {
-                startPage = Math.max(1, endPage - maxVisiblePages + 1);
-            }
-            
-            for (let i = startPage; i <= endPage; i++) {
-                paginationHTML += `<button class="${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
-            }
-            
-            // Next button
-            paginationHTML += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})"><i class="fas fa-chevron-right"></i></button>`;
-            
-            paginationContainer.innerHTML = paginationHTML;
-        }
-        
-        function changePage(page) {
-            currentPage = page;
-            renderProjects();
-            updatePagination();
-            
-            // Scroll to top of projects container
-            document.querySelector('.projects-container').scrollIntoView({ behavior: 'smooth' });
         }
         
         function updateStats() {
@@ -946,8 +978,150 @@
             delayedElement.textContent = delayed;
         }
         
-        // Add these to window object so they can be called from HTML
-        window.changePage = changePage;
+        function getStatusClass(status) {
+            switch (status) {
+                case 'Completed':
+                    return 'status-completed';
+                case 'In Progress':
+                    return 'status-in-progress';
+                case 'Planning':
+                    return 'status-planning';
+                case 'Delayed':
+                    return 'status-delayed';
+                default:
+                    return '';
+            }
+        }
+        
+        function renderProjects() {
+            const startIndex = (currentPage - 1) * projectsPerPage;
+            const endIndex = startIndex + projectsPerPage;
+            const projectsToShow = filteredProjects.slice(startIndex, endIndex);
+            
+            if (filteredProjects.length === 0) {
+                projectsTableContainer.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>No Projects Found</h3>
+                        <p>Try adjusting your filters or upload project data</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let tableHTML = `
+                <table class="project-table">
+                    <thead>
+                        <tr>
+                            <th>Project Name</th>
+                            <th>Company</th>
+                            <th>Company Location</th>
+                            <th>Budget (Cr ₹)</th>
+                            <th>Site Location</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            projectsToShow.forEach(project => {
+                tableHTML += `
+                    <tr>
+                        <td>${project.projectName}</td>
+                        <td>${project.companyName}</td>
+                        <td>${project.companyLocation}</td>
+                        <td>${project.budget.toFixed(2)}</td>
+                        <td>${project.siteLocation}</td>
+                        <td><span class="status ${getStatusClass(project.status)}">${project.status}</span></td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            projectsTableContainer.innerHTML = tableHTML;
+        }
+        
+        function updatePagination() {
+            const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
+            
+            if (totalPages <= 1) {
+                paginationContainer.innerHTML = '';
+                return;
+            }
+            
+            let paginationHTML = '';
+            
+            // Previous button
+            paginationHTML += `
+                <button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            `;
+            
+            // Page numbers
+            const maxPagesToShow = 5;
+            const startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+            const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHTML += `
+                    <button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            // Next button
+            paginationHTML += `
+                <button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            `;
+            
+            paginationContainer.innerHTML = paginationHTML;
+        }
+        
+        function goToPage(page) {
+            currentPage = page;
+            renderProjects();
+            updatePagination();
+            
+            // Scroll to top of projects section
+            document.querySelector('.projects-container').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Initialize the app
+        function initApp() {
+            // Check if data exists in localStorage
+            const savedData = loadProjectsFromLocalStorage();
+            
+            if (savedData && savedData.length > 0) {
+                allProjects = savedData;
+                filteredProjects = [...allProjects];
+                renderProjects();
+                updatePagination();
+                updateStats();
+            }
+            
+            // Event Listeners
+            resetFiltersBtn.addEventListener('click', resetFilters);
+            applyFiltersBtn.addEventListener('click', applyFilters);
+            loadSampleBtn.addEventListener('click', loadSampleData);
+            excelUpload.addEventListener('change', handleExcelUpload);
+            downloadTemplateBtn.addEventListener('click', downloadTemplate);
+            exportDataBtn.addEventListener('click', exportData);
+            clearDataBtn.addEventListener('click', clearAllData);
+            
+            // Make goToPage function available globally
+            window.goToPage = goToPage;
+        }
+        
+        // Call the initialization function when page loads
+        document.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
 </html>
