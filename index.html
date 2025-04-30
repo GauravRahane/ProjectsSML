@@ -438,6 +438,11 @@
                 <div class="value" id="completed">0</div>
             </div>
             <div class="stat-card">
+    <i class="fas fa-clipboard-list"></i>
+    <h3>Planning</h3>
+    <div class="value" id="planning">0</div>
+</div>
+            <div class="stat-card">
                 <i class="fas fa-clock"></i>
                 <h3>Delayed</h3>
                 <div class="value" id="delayed">0</div>
@@ -705,6 +710,7 @@
         const totalProjectsElement = document.getElementById('total-projects');
         const inProgressElement = document.getElementById('in-progress');
         const completedElement = document.getElementById('completed');
+        const planningElement = document.getElementById('planning');
         const delayedElement = document.getElementById('delayed');
         
         // Functions to save and load data from localStorage
@@ -969,12 +975,14 @@
             const total = allProjects.length;
             const inProgress = allProjects.filter(p => p.status === 'In Progress').length;
             const completed = allProjects.filter(p => p.status === 'Completed').length;
+            const planning = allProjects.filter(p => p.status === 'Planning').length;
             const delayed = allProjects.filter(p => p.status === 'Delayed').length;
             
             // Update DOM
             totalProjectsElement.textContent = total;
             inProgressElement.textContent = inProgress;
             completedElement.textContent = completed;
+            planningElement.textContent = planning;
             delayedElement.textContent = delayed;
         }
         
