@@ -948,52 +948,134 @@ function handleExcelUpload(e) {
     const file = e.target.files[0];
     
     if (!file) {
+        showNotification('No file selected', 'warning');
         return;
     }
+    
+    // Check file extension
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'xls', 'csv'].includes(fileExtension)) {
+        showNotification('Invalid file format. Please upload .xlsx, .xls, or .csv file', 'error');
+        return;
+    }
+    
+    showNotification('Processing file...', 'info');
     
     const reader = new FileReader();
     
     reader.onload = function(e) {
-        const data = e.target.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        
-        // Get first sheet
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        
-        // Convert to JSON
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
-        // Process the data
-        const processedData = jsonData.map((row, index) => {
-            return {
-                id: index + 1,
-                projectName: row['Project Name'] || '',
-                companyName: row['Company Name'] || '',
-                companyLocation: row['Company Location'] || '',
-                budget: parseFloat(row['Budget (Cr ₹)']) || 0,
-                siteLocation: row['Site Location'] || '',
-                status: row['Status'] || 'Planning'
-            };
-        });
-        
-        // Update the projects data
-        allProjects = processedData;
-        filteredProjects = [...allProjects];
-        
-        // Save to Firebase
-        saveProjectsToFirebase(allProjects);
-        
-        currentPage = 1;
-        renderProjects();
-        updatePagination();
-        updateStats();
-        
-        // Reset file input
-        document.getElementById('excel-upload').value = '';
+        try {
+            const data = e.target.result;
+            let jsonData;
+            
+            if (fileExtension === 'csv') {
+                // Parse CSV
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                jsonData = XLSX.utils.sheet_to_json(worksheet);
+            } else {
+                // Parse Excel
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                jsonData = XLSX.utils.sheet_to_json(worksheet);
+            }
+            
+            if (!jsonData || jsonData.length === 0) {
+                showNotification('No data found in the file', 'warning');
+                return;
+            }
+            
+            // Process the data with error handling
+            const processedData = [];
+            let hasErrors = false;
+            
+            jsonData.forEach((row, index) => {
+                // Check if row has expected columns
+                if (!row['Project Name'] && !row['project name'] && !row['PROJECT NAME']) {
+                    console.warn('Row missing Project Name:', row);
+                    hasErrors = true;
+                    return;
+                }
+                
+                // Get field values with case-insensitive keys
+                const getField = (possibleKeys) => {
+                    for (let key of possibleKeys) {
+                        for (let rowKey in row) {
+                            if (rowKey.toLowerCase() === key.toLowerCase()) {
+                                return row[rowKey];
+                            }
+                        }
+                    }
+                    return '';
+                };
+                
+                const projectName = getField(['Project Name', 'project name', 'PROJECT NAME']);
+                const companyName = getField(['Company Name', 'company name', 'COMPANY NAME']);
+                const companyLocation = getField(['Company Location', 'company location', 'COMPANY LOCATION']);
+                const budget = getField(['Budget (Cr ₹)', 'Budget', 'budget', 'BUDGET']);
+                const siteLocation = getField(['Site Location', 'site location', 'SITE LOCATION']);
+                const status = getField(['Status', 'status', 'STATUS']);
+                
+                processedData.push({
+                    id: index + 1,
+                    projectName: projectName || 'Unnamed Project',
+                    companyName: companyName || 'Unnamed Company',
+                    companyLocation: companyLocation || 'Unknown Location',
+                    budget: parseFloat(budget) || 0,
+                    siteLocation: siteLocation || 'Unknown Location',
+                    status: status || 'Planning'
+                });
+            });
+            
+            if (hasErrors) {
+                showNotification('Some rows had missing data and were skipped', 'warning');
+            }
+            
+            if (processedData.length === 0) {
+                showNotification('No valid data could be extracted from the file', 'error');
+                return;
+            }
+            
+            // Update the projects data
+            allProjects = processedData;
+            filteredProjects = [...allProjects];
+            
+            // Save to Firebase
+            saveProjectsToFirebase(allProjects);
+            
+            currentPage = 1;
+            renderProjects();
+            updatePagination();
+            updateStats();
+            
+            showNotification(`Successfully imported ${processedData.length} projects!`, 'success');
+            
+            // Reset file input
+            document.getElementById('excel-upload').value = '';
+            
+        } catch (error) {
+            console.error('Error processing Excel file:', error);
+            showNotification('Error processing the file. Please check the format.', 'error');
+            
+            // Reset file input
+            document.getElementById('excel-upload').value = '';
+        }
     };
     
-    reader.readAsBinaryString(file);
+    reader.onerror = function() {
+        showNotification('Error reading file', 'error');
+        console.error('FileReader error');
+    };
+    
+    // Read the file
+    try {
+        reader.readAsBinaryString(file);
+    } catch (error) {
+        console.error('Error reading file:', error);
+        showNotification('Error reading file', 'error');
+    }
 }
 
 function downloadTemplate() {
@@ -1208,7 +1290,15 @@ function updateStats() {
 }
 
 // Event listeners
-document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', () => {
+    // Other existing event listeners...
+    
+    const excelUpload = document.getElementById('excel-upload');
+    if (excelUpload) {
+        excelUpload.addEventListener('change', handleExcelUpload);
+    } else {
+        console.error('Excel upload element not found!');
+    }
     // Try to load data from Firebase first
     loadProjectsFromFirebase().then(projects => {
         if (projects.length > 0) {
