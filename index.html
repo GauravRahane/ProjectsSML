@@ -407,10 +407,6 @@
             }
         }
     </style>
-    <!-- Add Firebase SDK scripts here -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 </head>
 <body>
     <header>
@@ -551,26 +547,8 @@
         <span id="notification-message">Data saved successfully!</span>
     </div>
     
-     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
-        // Initialize Firebase first
-        const firebaseConfig = {
-            apiKey: "AIzaSyBUZmbKVXhMKRtr6knK7nd3WfG4GcUJc2I",
-            authDomain: "projectssml.firebaseapp.com",
-            projectId: "projectssml",
-            storageBucket: "projectssml.appspot.com",
-            messagingSenderId: "525806025941",
-            appId: "1:525806025941:web:99f4c25341815e73ddb65c",
-            measurementId: "G-WJ3D02H6V5"
-        };
-
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        
-        // Initialize Firestore
-        const db = firebase.firestore();
-        const projectsCollection = db.collection('projects');
-
         // Sample data for demonstration
         const sampleData = [
             {
@@ -739,81 +717,25 @@
         const planningElement = document.getElementById('planning');
         const delayedElement = document.getElementById('delayed');
         
-        // Function to save projects to Firebase
-function saveProjectsToFirebase(projects) {
-    // First, clear the existing collection
-    const batch = db.batch();
-    
-    // Get all existing documents and prepare to delete them
-    projectsCollection.get().then((querySnapshot) => {
-        querySnapshot.forEach((doc) => {
-            batch.delete(doc.ref);
-        });
-        
-        // After deleting, add all the new projects
-        projects.forEach((project) => {
-            const docRef = projectsCollection.doc(); // Auto-generated ID
-            batch.set(docRef, project);
-        });
-        
-        // Commit the batch
-        return batch.commit();
-    })
-    .then(() => {
-        showNotification('Data saved to Firebase successfully!');
-        // Also save to localStorage as a backup
-        localStorage.setItem('indiaProjectsData', JSON.stringify(projects));
-    })
-    .catch((error) => {
-        console.error('Error saving to Firebase:', error);
-        showNotification('Error saving to Firebase. Using local storage instead.', 'warning');
-        // Fall back to localStorage
-        localStorage.setItem('indiaProjectsData', JSON.stringify(projects));
-    });
-}
+        // Functions to save and load data from localStorage
+        function saveProjectsToLocalStorage(projects) {
+            try {
+                localStorage.setItem('indiaProjectsData', JSON.stringify(projects));
+                showNotification('Data saved successfully!');
+            } catch (error) {
+                console.error('Error saving to localStorage:', error);
+                if (error.name === 'QuotaExceededError') {
+                    showNotification('Storage limit exceeded. Some data may not be saved.', 'error');
+                } else {
+                    showNotification('Error saving data. Please try again.', 'error');
+                }
+            }
+        }
 
-       // Function to load projects from Firebase
-function loadProjectsFromFirebase() {
-    return new Promise((resolve, reject) => {
-        projectsCollection.get()
-            .then((querySnapshot) => {
-                const projects = [];
-                querySnapshot.forEach((doc) => {
-                    // Get data and add the document ID as project ID if needed
-                    const project = doc.data();
-                    projects.push(project);
-                });
-                
-                if (projects.length > 0) {
-                    showNotification(`Loaded ${projects.length} projects from Firebase!`);
-                    resolve(projects);
-                } else {
-                    // If Firebase has no data, try localStorage
-                    const localData = localStorage.getItem('indiaProjectsData');
-                    if (localData) {
-                        const parsedData = JSON.parse(localData);
-                        showNotification('Using locally stored data.');
-                        resolve(parsedData);
-                    } else {
-                        // No data found anywhere
-                        resolve([]);
-                    }
-                }
-            })
-            .catch((error) => {
-                console.error('Error loading from Firebase:', error);
-                showNotification('Error connecting to database. Using local data.', 'error');
-                
-                // Fall back to localStorage
-                const localData = localStorage.getItem('indiaProjectsData');
-                if (localData) {
-                    resolve(JSON.parse(localData));
-                } else {
-                    resolve([]);
-                }
-            });
-    });
-}
+        function loadProjectsFromLocalStorage() {
+            const savedData = localStorage.getItem('indiaProjectsData');
+            return savedData ? JSON.parse(savedData) : null;
+        }
 
         // Function to show notifications to the user
         function showNotification(message, type = 'success') {
@@ -932,54 +854,10 @@ document.getElementById('filter-results').style.display = 'none';
         }
         
         function loadSampleData() {
-    allProjects = [...sampleData];
-    
-    // Save to Firebase
-    saveProjectsToFirebase(allProjects);
-    
-    filteredProjects = [...allProjects];
-    currentPage = 1;
-    renderProjects();
-    updatePagination();
-    updateStats();
-}
+            allProjects = [...sampleData];
             
-            showNotification('Sample data loaded successfully!');
-        }
-        
-        function handleExcelUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            
-            if (jsonData.length === 0) {
-                showNotification('The uploaded file contains no data.', 'warning');
-                return;
-            }
-            
-            // Process the data to match our expected format
-            allProjects = jsonData.map((row, index) => {
-                return {
-                    id: index + 1,
-                    projectName: row['Project Name'] || 'Unknown Project',
-                    companyName: row['Company Name'] || 'Unknown Company',
-                    companyLocation: row['Company Location'] || 'Unknown Location',
-                    budget: parseFloat(row['Budget (Cr ₹)']) || 0,
-                    siteLocation: row['Site Location'] || 'Unknown Location',
-                    status: row['Status'] || 'Unknown'
-                };
-            });
-            
-            // Save to Firebase
-            saveProjectsToFirebase(allProjects);
+            // Save to localStorage
+            saveProjectsToLocalStorage(allProjects);
             
             filteredProjects = [...allProjects];
             currentPage = 1;
@@ -987,20 +865,63 @@ document.getElementById('filter-results').style.display = 'none';
             updatePagination();
             updateStats();
             
-            // Reset file input to allow selecting the same file again
-            excelUpload.value = '';
-            
-            showNotification(`Successfully loaded ${allProjects.length} projects!`);
-        } catch (error) {
-            console.error('Error processing Excel file:', error);
-            showNotification('Error processing the file. Please check the format.', 'error');
+            showNotification('Sample data loaded successfully!');
         }
-    };
-    reader.onerror = function() {
-        showNotification('Error reading the file. Please try again.', 'error');
-    };
-    reader.readAsArrayBuffer(file);
-}
+        
+        function handleExcelUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    if (jsonData.length === 0) {
+                        showNotification('The uploaded file contains no data.', 'warning');
+                        return;
+                    }
+                    
+                    // Process the data to match our expected format
+                    allProjects = jsonData.map((row, index) => {
+                        return {
+                            id: index + 1,
+                            projectName: row['Project Name'] || 'Unknown Project',
+                            companyName: row['Company Name'] || 'Unknown Company',
+                            companyLocation: row['Company Location'] || 'Unknown Location',
+                            budget: parseFloat(row['Budget (Cr ₹)']) || 0,
+                            siteLocation: row['Site Location'] || 'Unknown Location',
+                            status: row['Status'] || 'Unknown'
+                        };
+                    });
+                    
+                    // Save to localStorage
+                    saveProjectsToLocalStorage(allProjects);
+                    
+                    filteredProjects = [...allProjects];
+                    currentPage = 1;
+                    renderProjects();
+                    updatePagination();
+                    updateStats();
+                    
+                    // Reset file input to allow selecting the same file again
+                    excelUpload.value = '';
+                    
+                    showNotification(`Successfully loaded ${allProjects.length} projects!`);
+                } catch (error) {
+                    console.error('Error processing Excel file:', error);
+                    showNotification('Error processing the file. Please check the format.', 'error');
+                }
+            };
+            reader.onerror = function() {
+                showNotification('Error reading the file. Please try again.', 'error');
+            };
+            reader.readAsArrayBuffer(file);
+        }
         
         function downloadTemplate() {
             // Create a template workbook
@@ -1052,37 +973,17 @@ document.getElementById('filter-results').style.display = 'none';
         }
         
         function clearAllData() {
-    if (confirm('Are you sure you want to clear all project data? This action cannot be undone.')) {
-        allProjects = [];
-        filteredProjects = [];
-        
-        // Clear from Firebase
-        projectsCollection.get().then((querySnapshot) => {
-            const batch = db.batch();
-            querySnapshot.forEach((doc) => {
-                batch.delete(doc.ref);
-            });
-            return batch.commit();
-        })
-        .then(() => {
-            localStorage.removeItem('indiaProjectsData');
-            renderProjects();
-            updatePagination();
-            updateStats();
-            showNotification('All data has been cleared from Firebase and local storage');
-        })
-        .catch((error) => {
-            console.error('Error clearing Firebase data:', error);
-            showNotification('Error clearing Firebase data. Local data cleared.', 'error');
-            
-            // Still clear local data
-            localStorage.removeItem('indiaProjectsData');
-            renderProjects();
-            updatePagination();
-            updateStats();
-        });
-    }
-}
+            if (confirm('Are you sure you want to clear all project data? This action cannot be undone.')) {
+                allProjects = [];
+                filteredProjects = [];
+                localStorage.removeItem('indiaProjectsData');
+                renderProjects();
+                updatePagination();
+                updateStats();
+                
+                showNotification('All data has been cleared');
+            }
+        }
         
         function updateStats() {
             // Calculate statistics
@@ -1218,29 +1119,29 @@ document.getElementById('filter-results').style.display = 'none';
         
         // Initialize the app
         function initApp() {
-    // Load data from Firebase
-    loadProjectsFromFirebase().then((data) => {
-        if (data && data.length > 0) {
-            allProjects = data;
-            filteredProjects = [...allProjects];
-            renderProjects();
-            updatePagination();
-            updateStats();
+            // Check if data exists in localStorage
+            const savedData = loadProjectsFromLocalStorage();
+            
+            if (savedData && savedData.length > 0) {
+                allProjects = savedData;
+                filteredProjects = [...allProjects];
+                renderProjects();
+                updatePagination();
+                updateStats();
+            }
+            
+            // Event Listeners
+            resetFiltersBtn.addEventListener('click', resetFilters);
+            applyFiltersBtn.addEventListener('click', applyFilters);
+            loadSampleBtn.addEventListener('click', loadSampleData);
+            excelUpload.addEventListener('change', handleExcelUpload);
+            downloadTemplateBtn.addEventListener('click', downloadTemplate);
+            exportDataBtn.addEventListener('click', exportData);
+            clearDataBtn.addEventListener('click', clearAllData);
+            
+            // Make goToPage function available globally
+            window.goToPage = goToPage;
         }
-    });
-    
-    // Event Listeners
-    resetFiltersBtn.addEventListener('click', resetFilters);
-    applyFiltersBtn.addEventListener('click', applyFilters);
-    loadSampleBtn.addEventListener('click', loadSampleData);
-    excelUpload.addEventListener('change', handleExcelUpload);
-    downloadTemplateBtn.addEventListener('click', downloadTemplate);
-    exportDataBtn.addEventListener('click', exportData);
-    clearDataBtn.addEventListener('click', clearAllData);
-    
-    // Make goToPage function available globally
-    window.goToPage = goToPage;
-}
         
         // Call the initialization function when page loads
         document.addEventListener('DOMContentLoaded', initApp);
