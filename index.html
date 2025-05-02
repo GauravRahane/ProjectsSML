@@ -411,27 +411,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    
-    <!-- Add Firebase configuration here -->
-    <script>
-        // Your Firebase configuration
-        const firebaseConfig = {
-  apiKey: "AIzaSyBUZmbKVXhMKRtr6knK7nd3WfG4GcUJc2I",
-  authDomain: "projectssml.firebaseapp.com",
-  projectId: "projectssml",
-  storageBucket: "projectssml.firebasestorage.app",
-  messagingSenderId: "525806025941",
-  appId: "1:525806025941:web:99f4c25341815e73ddb65c",
-  measurementId: "G-WJ3D02H6V5"
-};
-
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        
-        // Initialize Firestore
-        const db = firebase.firestore();
-        const projectsCollection = db.collection('projects');
-    </script>
 </head>
 <body>
     <header>
@@ -572,8 +551,26 @@
         <span id="notification-message">Data saved successfully!</span>
     </div>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
+        // Initialize Firebase first
+        const firebaseConfig = {
+            apiKey: "AIzaSyBUZmbKVXhMKRtr6knK7nd3WfG4GcUJc2I",
+            authDomain: "projectssml.firebaseapp.com",
+            projectId: "projectssml",
+            storageBucket: "projectssml.appspot.com",
+            messagingSenderId: "525806025941",
+            appId: "1:525806025941:web:99f4c25341815e73ddb65c",
+            measurementId: "G-WJ3D02H6V5"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        
+        // Initialize Firestore
+        const db = firebase.firestore();
+        const projectsCollection = db.collection('projects');
+
         // Sample data for demonstration
         const sampleData = [
             {
