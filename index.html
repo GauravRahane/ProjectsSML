@@ -1,4 +1,3 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -380,6 +379,72 @@
             margin-top: 20px;
         }
 
+        /* Auth container styles */
+        .auth-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .auth-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid var(--primary);
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Last sync info */
+        .sync-info {
+            text-align: right;
+            color: var(--gray);
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+
         @media (max-width: 768px) {
             .header-content {
                 flex-direction: column;
@@ -413,14 +478,43 @@
         <div class="container">
             <div class="header-content">
                 <div class="logo">
-    <img src="https://media-hosting.imagekit.io/21567f3bf63c4b71/Logoo.png?Expires=1840594581&Key-Pair-Id=K2ZIVPTIP2VGHC&Signature=lMvQCYRAKYHcGbpOBarpyzKxexvxoTT-x-cI0fhC25WcnaWMA2wZ8eaS~tvhdoPlujzVnNalfLkNwCwOrB4vdbzQULBeulW0rZdxrmQw5pLu5AKOgRYwuoPW1rTPUfrcqIab3RJLIQBfXs6vaOHFnYJBJAS1VxKI9Gwflg6nkosBgNHuMPSToE5KQF75meQLLscTVo34LAY0SPnpmxFa8E443PJut~heva985MYMBpB-xdl2eOAO8bxUNQdxk2jRe2vgS6ScLi8E~Inva8sDoLr93lxbQ7hlTdFV6fMgMp9kkD~BN7fitE~nh8KuGgc8OI9x8qzNR~e3wDBoIoponw__" height="100">
-    <h1>Pan India Projects Tracker</h1>
-</div>
+                    <img src="/api/placeholder/100/100" alt="Logo" height="100">
+                    <h1>Pan India Projects Tracker</h1>
+                </div>
             </div>
         </div>
     </header>
     
     <div class="container">
+        <!-- Authentication Container -->
+        <div class="auth-container" id="auth-container">
+            <h2>Sign in to access shared project data</h2>
+            <p>Sign in to view and contribute to the shared project database</p>
+            <div class="auth-buttons">
+                <button class="btn btn-primary" id="login-btn">
+                    <i class="fas fa-sign-in-alt"></i> Sign In
+                </button>
+            </div>
+        </div>
+        
+        <div id="user-container" style="display: none;">
+            <div class="user-info">
+                <div class="user-avatar" id="user-avatar"></div>
+                <div>
+                    <div id="user-name">User Name</div>
+                    <div class="sync-info">Last synced: <span id="last-synced">Never</span></div>
+                </div>
+                <button class="btn btn-secondary" id="logout-btn" style="margin-left: auto;">
+                    <i class="fas fa-sign-out-alt"></i> Sign Out
+                </button>
+            </div>
+        </div>
+
+        <div class="loading-indicator" id="loading-indicator">
+            <div class="loading-spinner"></div>
+            <p>Loading project data...</p>
+        </div>
+        
         <div class="stats">
             <div class="stat-card">
                 <i class="fas fa-tasks"></i>
@@ -438,10 +532,10 @@
                 <div class="value" id="completed">0</div>
             </div>
             <div class="stat-card">
-    <i class="fas fa-clipboard-list"></i>
-    <h3>Planning</h3>
-    <div class="value" id="planning">0</div>
-</div>
+                <i class="fas fa-clipboard-list"></i>
+                <h3>Planning</h3>
+                <div class="value" id="planning">0</div>
+            </div>
             <div class="stat-card">
                 <i class="fas fa-clock"></i>
                 <h3>Delayed</h3>
@@ -495,10 +589,9 @@
             <div class="actions">
                 <button class="btn btn-secondary" id="reset-filters">Reset Filters</button>
                 <button class="btn btn-primary" id="apply-filters">Apply Filters</button>
-                </div>
-                <div class="filter-results" id="filter-results" style="display: none; margin-top: 15px; padding: 10px; background-color: #f8f8f8; border-radius: 6px;">
-    <span><strong>Filtered Results:</strong> <span id="filtered-count">0</span> projects found</span>
-
+            </div>
+            <div class="filter-results" id="filter-results" style="display: none; margin-top: 15px; padding: 10px; background-color: #f8f8f8; border-radius: 6px;">
+                <span><strong>Filtered Results:</strong> <span id="filtered-count">0</span> projects found</span>
             </div>
         </div>
         
@@ -522,6 +615,9 @@
                 <button class="btn btn-secondary" id="export-data">
                     <i class="fas fa-file-export"></i> Export Data
                 </button>
+                <button class="btn btn-secondary" id="sync-data" disabled>
+                    <i class="fas fa-sync-alt"></i> Sync Data
+                </button>
                 <button class="btn btn-secondary" id="clear-data">
                     <i class="fas fa-trash-alt"></i> Clear All Data
                 </button>
@@ -531,7 +627,7 @@
                 <div class="empty-state">
                     <i class="fas fa-folder-open"></i>
                     <h3>No Projects Found</h3>
-                    <p>Upload an Excel file with project data or click on the sample data button below</p>
+                    <p>Sign in and upload an Excel file with project data or click on the sample data button below</p>
                     <button class="btn btn-primary" id="load-sample">Load Sample Data</button>
                 </div>
             </div>
@@ -547,8 +643,32 @@
         <span id="notification-message">Data saved successfully!</span>
     </div>
     
+    <!-- Import Firebase SDK scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
     <script>
+        // Firebase configuration
+        // IMPORTANT: Replace these with your own Firebase project credentials
+        const firebaseConfig = {
+  apiKey: "AIzaSyBUZmbKVXhMKRtr6knK7nd3WfG4GcUJc2I",
+  authDomain: "projectssml.firebaseapp.com",
+  projectId: "projectssml",
+  storageBucket: "projectssml.firebasestorage.app",
+  messagingSenderId: "525806025941",
+  appId: "1:525806025941:web:99f4c25341815e73ddb65c",
+  measurementId: "G-WJ3D02H6V5"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        
+        // Get Firebase services
+        const auth = firebase.auth();
+        const database = firebase.database();
+        
         // Sample data for demonstration
         const sampleData = [
             {
@@ -692,6 +812,7 @@
         let filteredProjects = [];
         let currentPage = 1;
         const projectsPerPage = 10;
+        let currentUser = null;
         
         // DOM Elements
         const projectNameFilter = document.getElementById('project-name');
@@ -709,6 +830,17 @@
         const paginationContainer = document.getElementById('pagination');
         const exportDataBtn = document.getElementById('export-data');
         const clearDataBtn = document.getElementById('clear-data');
+        const syncDataBtn = document.getElementById('sync-data');
+
+        // Auth elements
+        const authContainer = document.getElementById('auth-container');
+        const userContainer = document.getElementById('user-container');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userAvatar = document.getElementById('user-avatar');
+        const userName = document.getElementById('user-name');
+        const lastSynced = document.getElementById('last-synced');
+        const loadingIndicator = document.getElementById('loading-indicator');
 
         // Statistics elements
         const totalProjectsElement = document.getElementById('total-projects');
@@ -717,434 +849,570 @@
         const planningElement = document.getElementById('planning');
         const delayedElement = document.getElementById('delayed');
         
-        // Functions to save and load data from localStorage
-        function saveProjectsToLocalStorage(projects) {
-            try {
-                localStorage.setItem('indiaProjectsData', JSON.stringify(projects));
-                showNotification('Data saved successfully!');
-            } catch (error) {
-                console.error('Error saving to localStorage:', error);
-                if (error.name === 'QuotaExceededError') {
-                    showNotification('Storage limit exceeded. Some data may not be saved.', 'error');
-                } else {
-                    showNotification('Error saving data. Please try again.', 'error');
-                }
-            }
+        // Firebase Authentication Functions
+        function signIn() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    // User successfully signed in
+                    showNotification('Signed in successfully!');
+                })
+                .catch((error) => {
+                    console.error('Error signing in:', error);
+                    showNotification('Error signing in. Please try again.', 'error');
+                });
         }
 
-        function loadProjectsFromLocalStorage() {
-            const savedData = localStorage.getItem('indiaProjectsData');
-            return savedData ? JSON.parse(savedData) : null;
+        function signOut() {
+            auth.signOut()
+                .then(() => {
+                    showNotification('Signed out successfully!');
+                })
+                .catch((error) => {
+                    console.error('Error signing out:', error);
+                    showNotification('Error signing out. Please try again.', 'error');
+                });
         }
 
-        // Function to show notifications to the user
-        function showNotification(message, type = 'success') {
-            const notification = document.getElementById('notification');
-            const notificationMessage = document.getElementById('notification-message');
+        // Firebase Database Functions
+        function saveProjectsToFirebase(projects) {
+    if (!currentUser) {
+        showNotification('Please sign in to save data', 'error');
+        return Promise.reject('User not authenticated');
+    }
+    
+    showNotification('Saving data to cloud...');
+    
+    // Create a reference to this user's projects
+    const userProjectsRef = database.ref('users/' + currentUser.uid + '/projects');
+    
+    // Set the projects data to replace any existing data
+    return userProjectsRef.set(projects)
+        .then(() => {
+            // Update the last synced timestamp
+            const timestamp = new Date().toLocaleString();
+            database.ref('users/' + currentUser.uid + '/lastSynced').set(timestamp);
+            lastSynced.textContent = timestamp;
             
-            // Set message
-            notificationMessage.textContent = message;
+            showNotification('Data saved to cloud successfully!');
+            syncDataBtn.disabled = false;
+            return projects;
+        })
+        .catch(error => {
+            console.error('Error saving data to Firebase:', error);
+            showNotification('Error saving data to cloud', 'error');
+            throw error;
+        });
+}
+
+function loadProjectsFromFirebase() {
+    if (!currentUser) {
+        return Promise.resolve([]);
+    }
+    
+    showLoading(true);
+    
+    // Create a reference to this user's projects
+    const userProjectsRef = database.ref('users/' + currentUser.uid + '/projects');
+    
+    // Get the data
+    return userProjectsRef.once('value')
+        .then(snapshot => {
+            const projects = snapshot.val() || [];
             
-            // Set background color based on type
-            if (type === 'success') {
-                notification.style.backgroundColor = 'var(--primary)';
-            } else if (type === 'error') {
-                notification.style.backgroundColor = '#e53935';
-            } else if (type === 'warning') {
-                notification.style.backgroundColor = '#fb8c00';
-            } else if (type === 'info') {
-                notification.style.backgroundColor = 'var(--secondary)';
-            }
-            
-            // Show notification
-            notification.style.display = 'block';
-            
-            // Hide after 3 seconds
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 3000);
-        }
-        
-        // Functions
-        function resetFilters() {
-            projectNameFilter.value = '';
-            companyNameFilter.value = '';
-            companyLocationFilter.value = '';
-            budgetFilter.value = '';
-            siteLocationFilter.value = '';
-            statusFilter.value = '';
-        // Hide filtered results counter
-document.getElementById('filter-results').style.display = 'none';
-            
-            if (allProjects.length > 0) {
-                filteredProjects = [...allProjects];
-                currentPage = 1;
-                renderProjects();
-                updatePagination();
-                updateStats();
-            }
-        }
-        
-        function applyFilters() {
-            const projectName = projectNameFilter.value.toLowerCase();
-            const companyName = companyNameFilter.value.toLowerCase();
-            const companyLocation = companyLocationFilter.value.toLowerCase();
-            const budget = budgetFilter.value;
-            const siteLocation = siteLocationFilter.value.toLowerCase();
-            const status = statusFilter.value;
-            
-            
-            filteredProjects = allProjects.filter(project => {
-                // Project name filter
-                if (projectName && !project.projectName.toLowerCase().includes(projectName)) {
-                    return false;
-                }
-                
-                // Company name filter
-                if (companyName && !project.companyName.toLowerCase().includes(companyName)) {
-                    return false;
-                }
-                
-                // Company location filter
-                if (companyLocation && !project.companyLocation.toLowerCase().includes(companyLocation)) {
-                    return false;
-                }
-                
-                // Budget filter
-                if (budget) {
-                    const projectBudget = project.budget;
+            // Get the last synced timestamp
+            return database.ref('users/' + currentUser.uid + '/lastSynced').once('value')
+                .then(syncSnapshot => {
+                    const timestamp = syncSnapshot.val() || 'Never';
+                    lastSynced.textContent = timestamp;
                     
-                    if (budget === '0-10' && (projectBudget < 0 || projectBudget > 10)) {
-                        return false;
-                    } else if (budget === '10-50' && (projectBudget < 10 || projectBudget > 50)) {
-                        return false;
-                    } else if (budget === '50-100' && (projectBudget < 50 || projectBudget > 100)) {
-                        return false;
-                    } else if (budget === '100-500' && (projectBudget < 100 || projectBudget > 500)) {
-                        return false;
-                    } else if (budget === '500+' && projectBudget < 500) {
-                        return false;
-                    }
-                }
-                
-                // Site location filter
-                if (siteLocation && !project.siteLocation.toLowerCase().includes(siteLocation)) {
-                    return false;
-                }
-                
-                // Status filter
-                if (status && project.status !== status) {
-                    return false;
-                }
-                
-                return true;
-            });
-            // Update filtered results count
-                const filterResultsDiv = document.getElementById('filter-results');
-                const filteredCountSpan = document.getElementById('filtered-count');
-                filteredCountSpan.textContent = filteredProjects.length;
+                    showLoading(false);
+                    return projects;
+                });
+        })
+        .catch(error => {
+            console.error('Error loading data from Firebase:', error);
+            showNotification('Error loading data from cloud', 'error');
+            showLoading(false);
+            return [];
+        });
+}
 
-          // Show filter results count if filters are active
-                const filtersActive = projectName || companyName || companyLocation || budget || siteLocation || status;
-                filterResultsDiv.style.display = filtersActive ? 'block' : 'none';
+// Helper Functions
+function showNotification(message, type = 'success') {
+    const notification = document.getElementById('notification');
+    const notificationMessage = document.getElementById('notification-message');
+    
+    notification.style.backgroundColor = type === 'success' ? 'var(--primary)' : 'var(--primary-dark)';
+    notificationMessage.textContent = message;
+    
+    notification.style.display = 'block';
+    
+    setTimeout(() => {
+        notification.style.display = 'none';
+    }, 3000);
+}
+
+function showLoading(show) {
+    loadingIndicator.style.display = show ? 'block' : 'none';
+}
+
+function updateStatistics() {
+    const totalProjects = allProjects.length;
+    const inProgress = allProjects.filter(p => p.status === 'In Progress').length;
+    const completed = allProjects.filter(p => p.status === 'Completed').length;
+    const planning = allProjects.filter(p => p.status === 'Planning').length;
+    const delayed = allProjects.filter(p => p.status === 'Delayed').length;
+    
+    totalProjectsElement.textContent = totalProjects;
+    inProgressElement.textContent = inProgress;
+    completedElement.textContent = completed;
+    planningElement.textContent = planning;
+    delayedElement.textContent = delayed;
+}
+
+function filterProjects() {
+    const projectName = projectNameFilter.value.toLowerCase();
+    const companyName = companyNameFilter.value.toLowerCase();
+    const companyLocation = companyLocationFilter.value.toLowerCase();
+    const budget = budgetFilter.value;
+    const siteLocation = siteLocationFilter.value.toLowerCase();
+    const status = statusFilter.value;
+    
+    filteredProjects = allProjects.filter(project => {
+        // Project name filter
+        if (projectName && !project.projectName.toLowerCase().includes(projectName)) {
+            return false;
+        }
+        
+        // Company name filter
+        if (companyName && !project.companyName.toLowerCase().includes(companyName)) {
+            return false;
+        }
+        
+        // Company location filter
+        if (companyLocation && !project.companyLocation.toLowerCase().includes(companyLocation)) {
+            return false;
+        }
+        
+        // Site location filter
+        if (siteLocation && !project.siteLocation.toLowerCase().includes(siteLocation)) {
+            return false;
+        }
+        
+        // Status filter
+        if (status && project.status !== status) {
+            return false;
+        }
+        
+        // Budget filter
+        if (budget) {
+            const projectBudget = parseFloat(project.budget);
             
-            currentPage = 1;
+            switch (budget) {
+                case '0-10':
+                    if (projectBudget < 0 || projectBudget > 10) return false;
+                    break;
+                case '10-50':
+                    if (projectBudget < 10 || projectBudget > 50) return false;
+                    break;
+                case '50-100':
+                    if (projectBudget < 50 || projectBudget > 100) return false;
+                    break;
+                case '100-500':
+                    if (projectBudget < 100 || projectBudget > 500) return false;
+                    break;
+                case '500+':
+                    if (projectBudget < 500) return false;
+                    break;
+            }
+        }
+        
+        return true;
+    });
+    
+    document.getElementById('filtered-count').textContent = filteredProjects.length;
+    document.getElementById('filter-results').style.display = 'block';
+    
+    currentPage = 1;
+    renderProjects();
+}
+
+function resetFilters() {
+    projectNameFilter.value = '';
+    companyNameFilter.value = '';
+    companyLocationFilter.value = '';
+    budgetFilter.value = '';
+    siteLocationFilter.value = '';
+    statusFilter.value = '';
+    
+    filteredProjects = [...allProjects];
+    document.getElementById('filter-results').style.display = 'none';
+    
+    currentPage = 1;
+    renderProjects();
+}
+
+function getStatusClass(status) {
+    switch (status) {
+        case 'Completed':
+            return 'status-completed';
+        case 'In Progress':
+            return 'status-in-progress';
+        case 'Planning':
+            return 'status-planning';
+        case 'Delayed':
+            return 'status-delayed';
+        default:
+            return '';
+    }
+}
+
+function renderProjects() {
+    const projectsToShow = filteredProjects || allProjects;
+    
+    // Clear the container
+    projectsTableContainer.innerHTML = '';
+    
+    if (projectsToShow.length === 0) {
+        // Show empty state
+        projectsTableContainer.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <h3>No Projects Found</h3>
+                <p>Upload an Excel file with project data or click on the sample data button below</p>
+                <button class="btn btn-primary" id="load-sample">Load Sample Data</button>
+            </div>
+        `;
+        
+        // Add event listener to the new load sample button
+        document.getElementById('load-sample').addEventListener('click', loadSampleData);
+        
+        // Hide pagination
+        paginationContainer.style.display = 'none';
+        return;
+    }
+    
+    // Calculate pagination
+    const totalPages = Math.ceil(projectsToShow.length / projectsPerPage);
+    const startIndex = (currentPage - 1) * projectsPerPage;
+    const endIndex = Math.min(startIndex + projectsPerPage, projectsToShow.length);
+    const currentProjects = projectsToShow.slice(startIndex, endIndex);
+    
+    // Create the table
+    const table = document.createElement('table');
+    table.className = 'project-table';
+    
+    // Create table header
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr>
+            <th>Project Name</th>
+            <th>Company Name</th>
+            <th>Company Location</th>
+            <th>Budget (Cr ₹)</th>
+            <th>Site Location</th>
+            <th>Status</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+    
+    // Create table body
+    const tbody = document.createElement('tbody');
+    
+    currentProjects.forEach(project => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${project.projectName}</td>
+            <td>${project.companyName}</td>
+            <td>${project.companyLocation}</td>
+            <td>${project.budget.toFixed(2)}</td>
+            <td>${project.siteLocation}</td>
+            <td><span class="status ${getStatusClass(project.status)}">${project.status}</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+    
+    table.appendChild(tbody);
+    projectsTableContainer.appendChild(table);
+    
+    // Render pagination
+    renderPagination(totalPages);
+    paginationContainer.style.display = 'flex';
+}
+
+function renderPagination(totalPages) {
+    paginationContainer.innerHTML = '';
+    
+    // Previous button
+    const prevButton = document.createElement('button');
+    prevButton.innerHTML = '&laquo;';
+    prevButton.disabled = currentPage === 1;
+    prevButton.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
             renderProjects();
-            updatePagination();
         }
-        
-        function loadSampleData() {
-            allProjects = [...sampleData];
-            
-            // Save to localStorage
-            saveProjectsToLocalStorage(allProjects);
-            
-            filteredProjects = [...allProjects];
-            currentPage = 1;
+    });
+    paginationContainer.appendChild(prevButton);
+    
+    // Page buttons
+    for (let i = 1; i <= totalPages; i++) {
+        const pageButton = document.createElement('button');
+        pageButton.textContent = i;
+        pageButton.className = i === currentPage ? 'active' : '';
+        pageButton.addEventListener('click', () => {
+            currentPage = i;
             renderProjects();
-            updatePagination();
-            updateStats();
-            
-            showNotification('Sample data loaded successfully!');
+        });
+        paginationContainer.appendChild(pageButton);
+    }
+    
+    // Next button
+    const nextButton = document.createElement('button');
+    nextButton.innerHTML = '&raquo;';
+    nextButton.disabled = currentPage === totalPages;
+    nextButton.addEventListener('click', () => {
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderProjects();
         }
-        
-        function handleExcelUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+    });
+    paginationContainer.appendChild(nextButton);
+}
+
+function loadSampleData() {
+    allProjects = JSON.parse(JSON.stringify(sampleData)); // Deep copy
+    filteredProjects = [...allProjects];
+    
+    updateStatistics();
+    renderProjects();
+    
+    // If user is signed in, save to Firebase
+    if (currentUser) {
+        saveProjectsToFirebase(allProjects);
+    }
+    
+    showNotification('Sample data loaded successfully!');
+}
+
+function handleExcelUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        try {
+            const data = e.target.result;
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
             
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                    
-                    if (jsonData.length === 0) {
-                        showNotification('The uploaded file contains no data.', 'warning');
-                        return;
-                    }
-                    
-                    // Process the data to match our expected format
-                    allProjects = jsonData.map((row, index) => {
-                        return {
-                            id: index + 1,
-                            projectName: row['Project Name'] || 'Unknown Project',
-                            companyName: row['Company Name'] || 'Unknown Company',
-                            companyLocation: row['Company Location'] || 'Unknown Location',
-                            budget: parseFloat(row['Budget (Cr ₹)']) || 0,
-                            siteLocation: row['Site Location'] || 'Unknown Location',
-                            status: row['Status'] || 'Unknown'
-                        };
-                    });
-                    
-                    // Save to localStorage
-                    saveProjectsToLocalStorage(allProjects);
-                    
-                    filteredProjects = [...allProjects];
-                    currentPage = 1;
-                    renderProjects();
-                    updatePagination();
-                    updateStats();
-                    
-                    // Reset file input to allow selecting the same file again
-                    excelUpload.value = '';
-                    
-                    showNotification(`Successfully loaded ${allProjects.length} projects!`);
-                } catch (error) {
-                    console.error('Error processing Excel file:', error);
-                    showNotification('Error processing the file. Please check the format.', 'error');
-                }
-            };
-            reader.onerror = function() {
-                showNotification('Error reading the file. Please try again.', 'error');
-            };
-            reader.readAsArrayBuffer(file);
-        }
-        
-        function downloadTemplate() {
-            // Create a template workbook
-            const templateData = [
-                {
-                    'Project Name': 'Example Project Name',
-                    'Company Name': 'Example Company Name',
-                    'Company Location': 'City, State',
-                    'Budget (Cr ₹)': 100.00,
-                    'Site Location': 'Project Site Location',
-                    'Status': 'In Progress'
-                }
-            ];
+            // Convert to JSON
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
             
-            const ws = XLSX.utils.json_to_sheet(templateData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Project Data Template');
-            
-            // Generate and download the file
-            XLSX.writeFile(wb, 'india_projects_tracker_template.xlsx');
-        }
-        
-        function exportData() {
-            if (allProjects.length === 0) {
-                showNotification('No data to export', 'warning');
-                return;
-            }
-            
-            // Format data for Excel export
-            const exportData = allProjects.map(project => {
+            // Validate and transform data
+            const processedData = jsonData.map((row, index) => {
                 return {
-                    'Project Name': project.projectName,
-                    'Company Name': project.companyName,
-                    'Company Location': project.companyLocation,
-                    'Budget (Cr ₹)': project.budget,
-                    'Site Location': project.siteLocation,
-                    'Status': project.status
+                    id: index + 1,
+                    projectName: row['Project Name'] || 'Untitled Project',
+                    companyName: row['Company Name'] || 'Unknown Company',
+                    companyLocation: row['Company Location'] || 'Unknown Location',
+                    budget: parseFloat(row['Budget (Cr ₹)']) || 0,
+                    siteLocation: row['Site Location'] || 'Unknown Site',
+                    status: row['Status'] || 'Planning'
                 };
             });
             
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'India Projects Data');
+            allProjects = processedData;
+            filteredProjects = [...allProjects];
             
-            // Generate and download the file
-            XLSX.writeFile(wb, 'india_projects_data_export.xlsx');
-            
-            showNotification('Data exported successfully!');
-        }
-        
-        function clearAllData() {
-            if (confirm('Are you sure you want to clear all project data? This action cannot be undone.')) {
-                allProjects = [];
-                filteredProjects = [];
-                localStorage.removeItem('indiaProjectsData');
-                renderProjects();
-                updatePagination();
-                updateStats();
-                
-                showNotification('All data has been cleared');
-            }
-        }
-        
-        function updateStats() {
-            // Calculate statistics
-            const total = allProjects.length;
-            const inProgress = allProjects.filter(p => p.status === 'In Progress').length;
-            const completed = allProjects.filter(p => p.status === 'Completed').length;
-            const planning = allProjects.filter(p => p.status === 'Planning').length;
-            const delayed = allProjects.filter(p => p.status === 'Delayed').length;
-            
-            // Update DOM
-            totalProjectsElement.textContent = total;
-            inProgressElement.textContent = inProgress;
-            completedElement.textContent = completed;
-            planningElement.textContent = planning;
-            delayedElement.textContent = delayed;
-        }
-        
-        function getStatusClass(status) {
-            switch (status) {
-                case 'Completed':
-                    return 'status-completed';
-                case 'In Progress':
-                    return 'status-in-progress';
-                case 'Planning':
-                    return 'status-planning';
-                case 'Delayed':
-                    return 'status-delayed';
-                default:
-                    return '';
-            }
-        }
-        
-        function renderProjects() {
-            const startIndex = (currentPage - 1) * projectsPerPage;
-            const endIndex = startIndex + projectsPerPage;
-            const projectsToShow = filteredProjects.slice(startIndex, endIndex);
-            
-            if (filteredProjects.length === 0) {
-                projectsTableContainer.innerHTML = `
-                    <div class="empty-state">
-                        <i class="fas fa-search"></i>
-                        <h3>No Projects Found</h3>
-                        <p>Try adjusting your filters or upload project data</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            let tableHTML = `
-                <table class="project-table">
-                    <thead>
-                        <tr>
-                            <th>Project Name</th>
-                            <th>Company</th>
-                            <th>Company Location</th>
-                            <th>Budget (Cr ₹)</th>
-                            <th>Site Location</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            projectsToShow.forEach(project => {
-                tableHTML += `
-                    <tr>
-                        <td>${project.projectName}</td>
-                        <td>${project.companyName}</td>
-                        <td>${project.companyLocation}</td>
-                        <td>${project.budget.toFixed(2)}</td>
-                        <td>${project.siteLocation}</td>
-                        <td><span class="status ${getStatusClass(project.status)}">${project.status}</span></td>
-                    </tr>
-                `;
-            });
-            
-            tableHTML += `
-                    </tbody>
-                </table>
-            `;
-            
-            projectsTableContainer.innerHTML = tableHTML;
-        }
-        
-        function updatePagination() {
-            const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
-            
-            if (totalPages <= 1) {
-                paginationContainer.innerHTML = '';
-                return;
-            }
-            
-            let paginationHTML = '';
-            
-            // Previous button
-            paginationHTML += `
-                <button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-            `;
-            
-            // Page numbers
-            const maxPagesToShow = 5;
-            const startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-            const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-            
-            for (let i = startPage; i <= endPage; i++) {
-                paginationHTML += `
-                    <button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">
-                        ${i}
-                    </button>
-                `;
-            }
-            
-            // Next button
-            paginationHTML += `
-                <button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-            `;
-            
-            paginationContainer.innerHTML = paginationHTML;
-        }
-        
-        function goToPage(page) {
-            currentPage = page;
+            updateStatistics();
             renderProjects();
-            updatePagination();
             
-            // Scroll to top of projects section
-            document.querySelector('.projects-container').scrollIntoView({ behavior: 'smooth' });
-        }
-        
-        // Initialize the app
-        function initApp() {
-            // Check if data exists in localStorage
-            const savedData = loadProjectsFromLocalStorage();
-            
-            if (savedData && savedData.length > 0) {
-                allProjects = savedData;
-                filteredProjects = [...allProjects];
-                renderProjects();
-                updatePagination();
-                updateStats();
+            // If user is signed in, save to Firebase
+            if (currentUser) {
+                saveProjectsToFirebase(allProjects);
             }
             
-            // Event Listeners
-            resetFiltersBtn.addEventListener('click', resetFilters);
-            applyFiltersBtn.addEventListener('click', applyFilters);
-            loadSampleBtn.addEventListener('click', loadSampleData);
-            excelUpload.addEventListener('change', handleExcelUpload);
-            downloadTemplateBtn.addEventListener('click', downloadTemplate);
-            exportDataBtn.addEventListener('click', exportData);
-            clearDataBtn.addEventListener('click', clearAllData);
-            
-            // Make goToPage function available globally
-            window.goToPage = goToPage;
+            showNotification('Excel data loaded successfully!');
+        } catch (error) {
+            console.error('Error processing Excel file:', error);
+            showNotification('Error processing Excel file. Please check the format.', 'error');
         }
         
-        // Call the initialization function when page loads
-        document.addEventListener('DOMContentLoaded', initApp);
-    </script>
-</body>
-</html>
+        // Reset the file input
+        event.target.value = '';
+    };
+    
+    reader.readAsBinaryString(file);
+}
+
+function exportDataToExcel() {
+    const projectsToExport = filteredProjects.length > 0 ? filteredProjects : allProjects;
+    
+    // Transform data for export
+    const dataForExport = projectsToExport.map(project => {
+        return {
+            'Project Name': project.projectName,
+            'Company Name': project.companyName,
+            'Company Location': project.companyLocation,
+            'Budget (Cr ₹)': project.budget,
+            'Site Location': project.siteLocation,
+            'Status': project.status
+        };
+    });
+    
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(dataForExport);
+    
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Projects');
+    
+    // Generate Excel file and download
+    XLSX.writeFile(workbook, 'Pan_India_Projects_Data.xlsx');
+}
+
+function downloadExcelTemplate() {
+    // Create template data
+    const templateData = [
+        {
+            'Project Name': 'Example Project',
+            'Company Name': 'Example Company',
+            'Company Location': 'City, State',
+            'Budget (Cr ₹)': 100,
+            'Site Location': 'Project Site Location',
+            'Status': 'Planning'
+        }
+    ];
+    
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+    
+    // Generate Excel file and download
+    XLSX.writeFile(workbook, 'Pan_India_Projects_Template.xlsx');
+}
+
+function clearAllData() {
+    if (confirm('Are you sure you want to clear all data? This cannot be undone.')) {
+        allProjects = [];
+        filteredProjects = [];
+        
+        updateStatistics();
+        renderProjects();
+        
+        // If user is signed in, save empty data to Firebase
+        if (currentUser) {
+            saveProjectsToFirebase(allProjects);
+        }
+        
+        showNotification('All data cleared successfully!');
+    }
+}
+
+function syncDataWithFirebase() {
+    if (!currentUser) {
+        showNotification('Please sign in to sync data', 'error');
+        return;
+    }
+    
+    showLoading(true);
+    
+    loadProjectsFromFirebase()
+        .then(projects => {
+            if (projects && projects.length > 0) {
+                allProjects = projects;
+                filteredProjects = [...allProjects];
+                
+                updateStatistics();
+                renderProjects();
+                
+                showNotification('Data synced from cloud successfully!');
+            } else {
+                showNotification('No data found in cloud to sync');
+            }
+            
+            showLoading(false);
+        })
+        .catch(error => {
+            console.error('Error syncing data:', error);
+            showNotification('Error syncing data from cloud', 'error');
+            showLoading(false);
+        });
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', () => {
+    // Auth event listeners
+    loginBtn.addEventListener('click', signIn);
+    logoutBtn.addEventListener('click', signOut);
+    
+    // Filter event listeners
+    resetFiltersBtn.addEventListener('click', resetFilters);
+    applyFiltersBtn.addEventListener('click', filterProjects);
+    
+    // Data management event listeners
+    loadSampleBtn.addEventListener('click', loadSampleData);
+    excelUpload.addEventListener('change', handleExcelUpload);
+    downloadTemplateBtn.addEventListener('click', downloadExcelTemplate);
+    exportDataBtn.addEventListener('click', exportDataToExcel);
+    clearDataBtn.addEventListener('click', clearAllData);
+    syncDataBtn.addEventListener('click', syncDataWithFirebase);
+    
+    // Initialize the UI
+    filteredProjects = [...allProjects];
+    renderProjects();
+    updateStatistics();
+    
+    // Auth state changes
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            // User is signed in
+            currentUser = user;
+            
+            // Update UI
+            authContainer.style.display = 'none';
+            userContainer.style.display = 'block';
+            
+            // Set user info
+            userAvatar.textContent = user.displayName.charAt(0).toUpperCase();
+            userName.textContent = user.displayName;
+            
+            // Enable sync button
+            syncDataBtn.disabled = false;
+            
+            // Load data from Firebase
+            loadProjectsFromFirebase()
+                .then(projects => {
+                    if (projects && projects.length > 0) {
+                        allProjects = projects;
+                        filteredProjects = [...allProjects];
+                        
+                        updateStatistics();
+                        renderProjects();
+                        
+                        showNotification('Data loaded from cloud successfully!');
+                    }
+                });
+        } else {
+            // User is signed out
+            currentUser = null;
+            
+            // Update UI
+            authContainer.style.display = 'block';
+            userContainer.style.display = 'none';
+            
+            // Disable sync button
+            syncDataBtn.disabled = true;
+            
+            // Reset last synced
+            lastSynced.textContent = 'Never';
+        }
+    });
+});
