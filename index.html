@@ -407,6 +407,7 @@
             }
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase/2.38.4/supabase.min.js"></script>
 </head>
 <body>
     <header>
@@ -868,61 +869,64 @@ document.getElementById('filter-results').style.display = 'none';
             showNotification('Sample data loaded successfully!');
         }
         
-        function handleExcelUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        async function handleExcelUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // First process the file locally as before
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
             
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                    
-                    if (jsonData.length === 0) {
-                        showNotification('The uploaded file contains no data.', 'warning');
-                        return;
-                    }
-                    
-                    // Process the data to match our expected format
-                    allProjects = jsonData.map((row, index) => {
-                        return {
-                            id: index + 1,
-                            projectName: row['Project Name'] || 'Unknown Project',
-                            companyName: row['Company Name'] || 'Unknown Company',
-                            companyLocation: row['Company Location'] || 'Unknown Location',
-                            budget: parseFloat(row['Budget (Cr ₹)']) || 0,
-                            siteLocation: row['Site Location'] || 'Unknown Location',
-                            status: row['Status'] || 'Unknown'
-                        };
-                    });
-                    
-                    // Save to localStorage
-                    saveProjectsToLocalStorage(allProjects);
-                    
-                    filteredProjects = [...allProjects];
-                    currentPage = 1;
-                    renderProjects();
-                    updatePagination();
-                    updateStats();
-                    
-                    // Reset file input to allow selecting the same file again
-                    excelUpload.value = '';
-                    
-                    showNotification(`Successfully loaded ${allProjects.length} projects!`);
-                } catch (error) {
-                    console.error('Error processing Excel file:', error);
-                    showNotification('Error processing the file. Please check the format.', 'error');
-                }
-            };
-            reader.onerror = function() {
-                showNotification('Error reading the file. Please try again.', 'error');
-            };
-            reader.readAsArrayBuffer(file);
+            if (jsonData.length === 0) {
+                showNotification('The uploaded file contains no data.', 'warning');
+                return;
+            }
+            
+            // Process the data to match our expected format
+            allProjects = jsonData.map((row, index) => {
+                return {
+                    id: index + 1,
+                    projectName: row['Project Name'] || 'Unknown Project',
+                    companyName: row['Company Name'] || 'Unknown Company',
+                    companyLocation: row['Company Location'] || 'Unknown Location',
+                    budget: parseFloat(row['Budget (Cr ₹)']) || 0,
+                    siteLocation: row['Site Location'] || 'Unknown Location',
+                    status: row['Status'] || 'Unknown'
+                };
+            });
+            
+            // Save to localStorage for offline use
+            saveProjectsToLocalStorage(allProjects);
+            
+            // Update the UI immediately
+            filteredProjects = [...allProjects];
+            currentPage = 1;
+            renderProjects();
+            updatePagination();
+            updateStats();
+            
+            // Reset file input to allow selecting the same file again
+            excelUpload.value = '';
+            
+            // Then upload to Supabase
+            await uploadExcelToSupabase(file);
+            
+        } catch (error) {
+            console.error('Error processing Excel file:', error);
+            showNotification('Error processing the file. Please check the format.', 'error');
         }
-        
+    };
+    reader.onerror = function() {
+        showNotification('Error reading the file. Please try again.', 'error');
+    };
+    reader.readAsArrayBuffer(file);
+}
         function downloadTemplate() {
             // Create a template workbook
             const templateData = [
@@ -1119,30 +1123,209 @@ document.getElementById('filter-results').style.display = 'none';
         
         // Initialize the app
         function initApp() {
-            // Check if data exists in localStorage
-            const savedData = loadProjectsFromLocalStorage();
+    // First check if there's newer data on the server
+    checkForUpdates().then(() => {
+        // If no server data or user declined update, check for local data
+        const savedData = loadProjectsFromLocalStorage();
+        
+        if (savedData && savedData.length > 0) {
+            allProjects = savedData;
+            filteredProjects = [...allProjects];
+            renderProjects();
+            updatePagination();
+            updateStats();
+        }
+    });
+    
+    // Event Listeners
+    resetFiltersBtn.addEventListener('click', resetFilters);
+    applyFiltersBtn.addEventListener('click', applyFilters);
+    loadSampleBtn.addEventListener('click', loadSampleData);
+    excelUpload.addEventListener('change', handleExcelUpload); // This now uses the new override function
+    downloadTemplateBtn.addEventListener('click', downloadTemplate);
+    exportDataBtn.addEventListener('click', exportData);
+    clearDataBtn.addEventListener('click', clearAllData);
+    
+    // Add a new button for loading latest data
+    const loadLatestBtn = document.createElement('button');
+    loadLatestBtn.className = 'btn btn-secondary';
+    loadLatestBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Load Latest Data';
+    loadLatestBtn.addEventListener('click', loadLatestProjectData);
+    document.querySelector('.data-management').appendChild(loadLatestBtn);
+    
+    // Make goToPage function available globally
+    window.goToPage = goToPage;
+}
+        // Supabase configuration
+const SUPABASE_URL = 'https://zlikhwcpjchmjwjqonxs.supabase.co'; // Replace with your Supabase URL
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsaWtod2NwamNobWp3anFvbnhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY0MjczODEsImV4cCI6MjA2MjAwMzM4MX0.ln1FS8SxrTC77u1DOQaMqqg8CUKDJ4r8ipomWAhs2h4'; // Replace with your Supabase anon key
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Function to upload Excel file to Supabase
+async function uploadExcelToSupabase(file) {
+    try {
+        showNotification('Uploading file...', 'info');
+        
+        // Upload the file to Supabase Storage
+        const fileName = `project_data_${Date.now()}.xlsx`;
+        const { data: fileData, error: uploadError } = await supabase
+            .storage
+            .from('project-files')
+            .upload(fileName, file);
             
-            if (savedData && savedData.length > 0) {
-                allProjects = savedData;
-                filteredProjects = [...allProjects];
-                renderProjects();
-                updatePagination();
-                updateStats();
-            }
-            
-            // Event Listeners
-            resetFiltersBtn.addEventListener('click', resetFilters);
-            applyFiltersBtn.addEventListener('click', applyFilters);
-            loadSampleBtn.addEventListener('click', loadSampleData);
-            excelUpload.addEventListener('change', handleExcelUpload);
-            downloadTemplateBtn.addEventListener('click', downloadTemplate);
-            exportDataBtn.addEventListener('click', exportData);
-            clearDataBtn.addEventListener('click', clearAllData);
-            
-            // Make goToPage function available globally
-            window.goToPage = goToPage;
+        if (uploadError) {
+            throw uploadError;
         }
         
+        // Get public URL for the file
+        const { data: { publicUrl } } = supabase
+            .storage
+            .from('project-files')
+            .getPublicUrl(fileName);
+            
+        // Store metadata in the database
+        const { data, error } = await supabase
+            .from('project_files')
+            .insert([
+                { 
+                    file_name: fileName,
+                    file_url: publicUrl,
+                    uploaded_at: new Date(),
+                    is_current: true
+                }
+            ]);
+            
+        if (error) {
+            throw error;
+        }
+        
+        // Also store the project data in the database
+        await storeProjectData(allProjects);
+        
+        showNotification('File uploaded successfully!');
+        loadLatestProjectData();
+        
+        return publicUrl;
+    } catch (error) {
+        console.error('Error uploading file:', error);
+        showNotification('Failed to upload file. Please try again.', 'error');
+        return null;
+    }
+}
+
+// Function to store project data in Supabase
+async function storeProjectData(projects) {
+    try {
+        // First, delete existing project data
+        const { error: deleteError } = await supabase
+            .from('projects')
+            .delete()
+            .neq('id', 0); // Delete all records
+            
+        // Then insert new projects
+        const { data, error } = await supabase
+            .from('projects')
+            .insert(projects.map(project => ({
+                project_name: project.projectName,
+                company_name: project.companyName,
+                company_location: project.companyLocation,
+                budget: project.budget,
+                site_location: project.siteLocation,
+                status: project.status
+            })));
+            
+        if (error) {
+            throw error;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error storing project data:', error);
+        return false;
+    }
+}
+
+// Function to load latest project data from Supabase
+async function loadLatestProjectData() {
+    try {
+        // Get latest file info
+        const { data: fileData, error: fileError } = await supabase
+            .from('project_files')
+            .select('*')
+            .order('uploaded_at', { ascending: false })
+            .limit(1);
+            
+        if (fileError || !fileData || fileData.length === 0) {
+            return false;
+        }
+        
+        // Get projects from the database
+        const { data: projectsData, error: projectsError } = await supabase
+            .from('projects')
+            .select('*');
+            
+        if (projectsError) {
+            throw projectsError;
+        }
+        
+        if (projectsData && projectsData.length > 0) {
+            // Convert the data format to match our expected structure
+            allProjects = projectsData.map((item, index) => ({
+                id: index + 1,
+                projectName: item.project_name,
+                companyName: item.company_name,
+                companyLocation: item.company_location,
+                budget: parseFloat(item.budget) || 0,
+                siteLocation: item.site_location,
+                status: item.status
+            }));
+            
+            filteredProjects = [...allProjects];
+            currentPage = 1;
+            renderProjects();
+            updatePagination();
+            updateStats();
+            
+            showNotification(`Loaded ${allProjects.length} projects from server!`);
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('Error loading project data:', error);
+        showNotification('Failed to load latest data. Using local data if available.', 'warning');
+        return false;
+    }
+}
+
+// Function to check if there is newer data on the server
+async function checkForUpdates() {
+    try {
+        const { data, error } = await supabase
+            .from('project_files')
+            .select('uploaded_at')
+            .order('uploaded_at', { ascending: false })
+            .limit(1);
+            
+        if (error || !data || data.length === 0) {
+            return;
+        }
+        
+        const lastUpdateTime = new Date(data[0].uploaded_at);
+        const lastLocalUpdateTime = localStorage.getItem('lastDataUpdateTime');
+        
+        if (!lastLocalUpdateTime || new Date(lastLocalUpdateTime) < lastUpdateTime) {
+            const shouldUpdate = confirm('New project data is available. Would you like to load the latest data?');
+            
+            if (shouldUpdate) {
+                loadLatestProjectData();
+                localStorage.setItem('lastDataUpdateTime', lastUpdateTime.toISOString());
+            }
+        }
+    } catch (error) {
+        console.error('Error checking for updates:', error);
+    }
+}
         // Call the initialization function when page loads
         document.addEventListener('DOMContentLoaded', initApp);
     </script>
