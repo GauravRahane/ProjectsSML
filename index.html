@@ -407,16 +407,15 @@
             }
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/supabase/2.38.4/supabase.min.js"></script>
 </head>
 <body>
     <header>
         <div class="container">
             <div class="header-content">
                 <div class="logo">
-    <img src="https://media-hosting.imagekit.io/21567f3bf63c4b71/Logoo.png?Expires=1840594581&Key-Pair-Id=K2ZIVPTIP2VGHC&Signature=lMvQCYRAKYHcGbpOBarpyzKxexvxoTT-x-cI0fhC25WcnaWMA2wZ8eaS~tvhdoPlujzVnNalfLkNwCwOrB4vdbzQULBeulW0rZdxrmQw5pLu5AKOgRYwuoPW1rTPUfrcqIab3RJLIQBfXs6vaOHFnYJBJAS1VxKI9Gwflg6nkosBgNHuMPSToE5KQF75meQLLscTVo34LAY0SPnpmxFa8E443PJut~heva985MYMBpB-xdl2eOAO8bxUNQdxk2jRe2vgS6ScLi8E~Inva8sDoLr93lxbQ7hlTdFV6fMgMp9kkD~BN7fitE~nh8KuGgc8OI9x8qzNR~e3wDBoIoponw__" height="100">
-    <h1>Pan India Projects Tracker</h1>
-</div>
+                    <i class="fas fa-project-diagram"></i>
+                    <h1>Pan India Projects Tracker</h1>
+                </div>
             </div>
         </div>
     </header>
@@ -439,10 +438,10 @@
                 <div class="value" id="completed">0</div>
             </div>
             <div class="stat-card">
-    <i class="fas fa-clipboard-list"></i>
-    <h3>Planning</h3>
-    <div class="value" id="planning">0</div>
-</div>
+                <i class="fas fa-clipboard-list"></i>
+                <h3>Planning</h3>
+                <div class="value" id="planning">0</div>
+            </div>
             <div class="stat-card">
                 <i class="fas fa-clock"></i>
                 <h3>Delayed</h3>
@@ -496,10 +495,9 @@
             <div class="actions">
                 <button class="btn btn-secondary" id="reset-filters">Reset Filters</button>
                 <button class="btn btn-primary" id="apply-filters">Apply Filters</button>
-                </div>
-                <div class="filter-results" id="filter-results" style="display: none; margin-top: 15px; padding: 10px; background-color: #f8f8f8; border-radius: 6px;">
-    <span><strong>Filtered Results:</strong> <span id="filtered-count">0</span> projects found</span>
-
+            </div>
+            <div class="filter-results" id="filter-results" style="display: none; margin-top: 15px; padding: 10px; background-color: #f8f8f8; border-radius: 6px;">
+                <span><strong>Filtered Results:</strong> <span id="filtered-count">0</span> projects found</span>
             </div>
         </div>
         
@@ -526,6 +524,13 @@
                 <button class="btn btn-secondary" id="clear-data">
                     <i class="fas fa-trash-alt"></i> Clear All Data
                 </button>
+                <button class="btn btn-secondary" id="backup-data">
+                    <i class="fas fa-save"></i> Backup Data
+                </button>
+                <button class="btn btn-secondary" id="restore-data">
+                    <i class="fas fa-upload"></i> Restore Backup
+                </button>
+                <input type="file" id="restore-upload" accept=".json" style="display: none;">
             </div>
             
             <div id="projects-table-container">
@@ -694,6 +699,12 @@
         let currentPage = 1;
         const projectsPerPage = 10;
         
+        // IndexedDB configuration
+        const DB_NAME = 'IndiaProjectsDB';
+        const DB_VERSION = 1;
+        const PROJECTS_STORE = 'projects';
+        let db;
+        
         // DOM Elements
         const projectNameFilter = document.getElementById('project-name');
         const companyNameFilter = document.getElementById('company-name');
@@ -710,6 +721,9 @@
         const paginationContainer = document.getElementById('pagination');
         const exportDataBtn = document.getElementById('export-data');
         const clearDataBtn = document.getElementById('clear-data');
+        const backupDataBtn = document.getElementById('backup-data');
+        const restoreDataBtn = document.getElementById('restore-data');
+        const restoreUpload = document.getElementById('restore-upload');
 
         // Statistics elements
         const totalProjectsElement = document.getElementById('total-projects');
@@ -718,18 +732,127 @@
         const planningElement = document.getElementById('planning');
         const delayedElement = document.getElementById('delayed');
         
+        // Initialize IndexedDB
+        function initIndexedDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                
+                request.onerror = event => {
+                    console.error('IndexedDB error:', event.target.error);
+                    showNotification('Database error. Falling back to localStorage.', 'error');
+                    resolve(false);
+                };
+                
+                request.onsuccess = event => {
+                    db = event.target.result;
+                    console.log('Database opened successfully');
+                    resolve(true);
+                };
+                
+                request.onupgradeneeded = event => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(PROJECTS_STORE)) {
+                        const store = db.createObjectStore(PROJECTS_STORE, { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('status', 'status', { unique: false });
+                        store.createIndex('projectName', 'projectName', { unique: false });
+                        store.createIndex('companyName', 'companyName', { unique: false });
+                    }
+                };
+            });
+        }
+        
+        // Function to save projects to IndexedDB
+        function saveProjectsToIndexedDB(projects) {
+            return new Promise((resolve, reject) => {
+                if (!db) {
+                    saveProjectsToLocalStorage(projects);
+                    resolve(false);
+                    return;
+                }
+                
+                const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
+                const store = transaction.objectStore(PROJECTS_STORE);
+                
+                // Clear existing data
+                const clearRequest = store.clear();
+                
+                clearRequest.onsuccess = () => {
+                    // Add all projects
+                    let counter = 0;
+                    
+                    projects.forEach(project => {
+                        const request = store.add(project);
+                        
+                        request.onsuccess = () => {
+                            counter++;
+                            if (counter === projects.length) {
+                                // Also save to localStorage as backup
+                                try {
+                                    localStorage.setItem('indiaProjectsData', JSON.stringify(projects));
+                                } catch (e) {
+                                    console.warn('localStorage quota exceeded, using IndexedDB only');
+                                }
+                                
+                                showNotification('Data saved successfully!');
+                                resolve(true);
+                            }
+                        };
+                        
+                        request.onerror = event => {
+                            console.error('Error adding project:', event.target.error);
+                            reject(event.target.error);
+                        };
+                    });
+                };
+                
+                clearRequest.onerror = event => {
+                    console.error('Error clearing store:', event.target.error);
+                    reject(event.target.error);
+                };
+            });
+        }
+        
+        // Function to load projects from IndexedDB
+        function loadProjectsFromIndexedDB() {
+            return new Promise((resolve, reject) => {
+                if (!db) {
+                    const data = loadProjectsFromLocalStorage();
+                    resolve(data);
+                    return;
+                }
+                
+                const transaction = db.transaction([PROJECTS_STORE], 'readonly');
+                const store = transaction.objectStore(PROJECTS_STORE);
+                const request = store.getAll();
+                
+                request.onsuccess = event => {
+                    resolve(event.target.result);
+                };
+                
+                request.onerror = event => {
+                    console.error('Error loading projects:', event.target.error);
+                    // Fallback to localStorage
+                    const data = loadProjectsFromLocalStorage();
+                    resolve(data);
+                };
+            });
+        }
+        
         // Functions to save and load data from localStorage
         function saveProjectsToLocalStorage(projects) {
             try {
                 localStorage.setItem('indiaProjectsData', JSON.stringify(projects));
+                localStorage.setItem('lastDataUpdateTime', new Date().toISOString());
                 showNotification('Data saved successfully!');
+                return true;
             } catch (error) {
                 console.error('Error saving to localStorage:', error);
                 if (error.name === 'QuotaExceededError') {
-                    showNotification('Storage limit exceeded. Some data may not be saved.', 'error');
+                    showNotification('Storage limit exceeded. Try using the backup function instead.', 'error');
                 } else {
                     showNotification('Error saving data. Please try again.', 'error');
                 }
+                return false;
             }
         }
 
@@ -767,21 +890,21 @@
         }
         
         // Functions
-        function resetFilters() {
+       function resetFilters() {
             projectNameFilter.value = '';
             companyNameFilter.value = '';
             companyLocationFilter.value = '';
             budgetFilter.value = '';
             siteLocationFilter.value = '';
             statusFilter.value = '';
-        // Hide filtered results counter
-document.getElementById('filter-results').style.display = 'none';
+            
+            // Hide filtered results counter
+            document.getElementById('filter-results').style.display = 'none';
             
             if (allProjects.length > 0) {
                 filteredProjects = [...allProjects];
                 currentPage = 1;
                 renderProjects();
-                updatePagination();
                 updateStats();
             }
         }
@@ -794,252 +917,72 @@ document.getElementById('filter-results').style.display = 'none';
             const siteLocation = siteLocationFilter.value.toLowerCase();
             const status = statusFilter.value;
             
-            
             filteredProjects = allProjects.filter(project => {
-                // Project name filter
-                if (projectName && !project.projectName.toLowerCase().includes(projectName)) {
-                    return false;
-                }
+                let budgetMatch = true;
                 
-                // Company name filter
-                if (companyName && !project.companyName.toLowerCase().includes(companyName)) {
-                    return false;
-                }
-                
-                // Company location filter
-                if (companyLocation && !project.companyLocation.toLowerCase().includes(companyLocation)) {
-                    return false;
-                }
-                
-                // Budget filter
                 if (budget) {
                     const projectBudget = project.budget;
                     
-                    if (budget === '0-10' && (projectBudget < 0 || projectBudget > 10)) {
-                        return false;
-                    } else if (budget === '10-50' && (projectBudget < 10 || projectBudget > 50)) {
-                        return false;
-                    } else if (budget === '50-100' && (projectBudget < 50 || projectBudget > 100)) {
-                        return false;
-                    } else if (budget === '100-500' && (projectBudget < 100 || projectBudget > 500)) {
-                        return false;
-                    } else if (budget === '500+' && projectBudget < 500) {
-                        return false;
+                    if (budget === '0-10') {
+                        budgetMatch = projectBudget >= 0 && projectBudget <= 10;
+                    } else if (budget === '10-50') {
+                        budgetMatch = projectBudget > 10 && projectBudget <= 50;
+                    } else if (budget === '50-100') {
+                        budgetMatch = projectBudget > 50 && projectBudget <= 100;
+                    } else if (budget === '100-500') {
+                        budgetMatch = projectBudget > 100 && projectBudget <= 500;
+                    } else if (budget === '500+') {
+                        budgetMatch = projectBudget > 500;
                     }
                 }
                 
-                // Site location filter
-                if (siteLocation && !project.siteLocation.toLowerCase().includes(siteLocation)) {
-                    return false;
-                }
-                
-                // Status filter
-                if (status && project.status !== status) {
-                    return false;
-                }
-                
-                return true;
+                return (
+                    (!projectName || project.projectName.toLowerCase().includes(projectName)) &&
+                    (!companyName || project.companyName.toLowerCase().includes(companyName)) &&
+                    (!companyLocation || project.companyLocation.toLowerCase().includes(companyLocation)) &&
+                    budgetMatch &&
+                    (!siteLocation || project.siteLocation.toLowerCase().includes(siteLocation)) &&
+                    (!status || project.status === status)
+                );
             });
-            // Update filtered results count
-                const filterResultsDiv = document.getElementById('filter-results');
-                const filteredCountSpan = document.getElementById('filtered-count');
-                filteredCountSpan.textContent = filteredProjects.length;
-
-          // Show filter results count if filters are active
-                const filtersActive = projectName || companyName || companyLocation || budget || siteLocation || status;
-                filterResultsDiv.style.display = filtersActive ? 'block' : 'none';
+            
+            // Show filtered results counter
+            const filterResults = document.getElementById('filter-results');
+            const filteredCount = document.getElementById('filtered-count');
+            filteredCount.textContent = filteredProjects.length;
+            filterResults.style.display = 'block';
             
             currentPage = 1;
             renderProjects();
-            updatePagination();
-        }
-        
-        function loadSampleData() {
-            allProjects = [...sampleData];
-            
-            // Save to localStorage
-            saveProjectsToLocalStorage(allProjects);
-            
-            filteredProjects = [...allProjects];
-            currentPage = 1;
-            renderProjects();
-            updatePagination();
-            updateStats();
-            
-            showNotification('Sample data loaded successfully!');
-        }
-        
-        async function handleExcelUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    // First process the file locally as before
-    const reader = new FileReader();
-    reader.onload = async function(e) {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
-            
-            if (jsonData.length === 0) {
-                showNotification('The uploaded file contains no data.', 'warning');
-                return;
-            }
-            
-            // Process the data to match our expected format
-            allProjects = jsonData.map((row, index) => {
-                return {
-                    id: index + 1,
-                    projectName: row['Project Name'] || 'Unknown Project',
-                    companyName: row['Company Name'] || 'Unknown Company',
-                    companyLocation: row['Company Location'] || 'Unknown Location',
-                    budget: parseFloat(row['Budget (Cr ₹)']) || 0,
-                    siteLocation: row['Site Location'] || 'Unknown Location',
-                    status: row['Status'] || 'Unknown'
-                };
-            });
-            
-            // Save to localStorage for offline use
-            saveProjectsToLocalStorage(allProjects);
-            
-            // Update the UI immediately
-            filteredProjects = [...allProjects];
-            currentPage = 1;
-            renderProjects();
-            updatePagination();
-            updateStats();
-            
-            // Reset file input to allow selecting the same file again
-            excelUpload.value = '';
-            
-            // Then upload to Supabase
-            await uploadExcelToSupabase(file);
-            
-        } catch (error) {
-            console.error('Error processing Excel file:', error);
-            showNotification('Error processing the file. Please check the format.', 'error');
-        }
-    };
-    reader.onerror = function() {
-        showNotification('Error reading the file. Please try again.', 'error');
-    };
-    reader.readAsArrayBuffer(file);
-}
-        function downloadTemplate() {
-            // Create a template workbook
-            const templateData = [
-                {
-                    'Project Name': 'Example Project Name',
-                    'Company Name': 'Example Company Name',
-                    'Company Location': 'City, State',
-                    'Budget (Cr ₹)': 100.00,
-                    'Site Location': 'Project Site Location',
-                    'Status': 'In Progress'
-                }
-            ];
-            
-            const ws = XLSX.utils.json_to_sheet(templateData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Project Data Template');
-            
-            // Generate and download the file
-            XLSX.writeFile(wb, 'india_projects_tracker_template.xlsx');
-        }
-        
-        function exportData() {
-            if (allProjects.length === 0) {
-                showNotification('No data to export', 'warning');
-                return;
-            }
-            
-            // Format data for Excel export
-            const exportData = allProjects.map(project => {
-                return {
-                    'Project Name': project.projectName,
-                    'Company Name': project.companyName,
-                    'Company Location': project.companyLocation,
-                    'Budget (Cr ₹)': project.budget,
-                    'Site Location': project.siteLocation,
-                    'Status': project.status
-                };
-            });
-            
-            const ws = XLSX.utils.json_to_sheet(exportData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'India Projects Data');
-            
-            // Generate and download the file
-            XLSX.writeFile(wb, 'india_projects_data_export.xlsx');
-            
-            showNotification('Data exported successfully!');
-        }
-        
-        function clearAllData() {
-            if (confirm('Are you sure you want to clear all project data? This action cannot be undone.')) {
-                allProjects = [];
-                filteredProjects = [];
-                localStorage.removeItem('indiaProjectsData');
-                renderProjects();
-                updatePagination();
-                updateStats();
-                
-                showNotification('All data has been cleared');
-            }
-        }
-        
-        function updateStats() {
-            // Calculate statistics
-            const total = allProjects.length;
-            const inProgress = allProjects.filter(p => p.status === 'In Progress').length;
-            const completed = allProjects.filter(p => p.status === 'Completed').length;
-            const planning = allProjects.filter(p => p.status === 'Planning').length;
-            const delayed = allProjects.filter(p => p.status === 'Delayed').length;
-            
-            // Update DOM
-            totalProjectsElement.textContent = total;
-            inProgressElement.textContent = inProgress;
-            completedElement.textContent = completed;
-            planningElement.textContent = planning;
-            delayedElement.textContent = delayed;
-        }
-        
-        function getStatusClass(status) {
-            switch (status) {
-                case 'Completed':
-                    return 'status-completed';
-                case 'In Progress':
-                    return 'status-in-progress';
-                case 'Planning':
-                    return 'status-planning';
-                case 'Delayed':
-                    return 'status-delayed';
-                default:
-                    return '';
-            }
         }
         
         function renderProjects() {
-            const startIndex = (currentPage - 1) * projectsPerPage;
-            const endIndex = startIndex + projectsPerPage;
-            const projectsToShow = filteredProjects.slice(startIndex, endIndex);
-            
             if (filteredProjects.length === 0) {
                 projectsTableContainer.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-search"></i>
                         <h3>No Projects Found</h3>
-                        <p>Try adjusting your filters or upload project data</p>
+                        <p>Try adjusting your filters or upload new data</p>
+                        <button class="btn btn-primary" id="load-sample">Load Sample Data</button>
                     </div>
                 `;
+                document.getElementById('load-sample').addEventListener('click', loadSampleData);
+                paginationContainer.innerHTML = '';
                 return;
             }
             
+            // Pagination
+            const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
+            const startIndex = (currentPage - 1) * projectsPerPage;
+            const endIndex = Math.min(startIndex + projectsPerPage, filteredProjects.length);
+            const currentProjects = filteredProjects.slice(startIndex, endIndex);
+            
+            // Render the table
             let tableHTML = `
                 <table class="project-table">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Project Name</th>
                             <th>Company</th>
                             <th>Company Location</th>
@@ -1051,15 +994,22 @@ document.getElementById('filter-results').style.display = 'none';
                     <tbody>
             `;
             
-            projectsToShow.forEach(project => {
+            currentProjects.forEach(project => {
+                let statusClass = '';
+                if (project.status === 'Completed') statusClass = 'status-completed';
+                else if (project.status === 'In Progress') statusClass = 'status-in-progress';
+                else if (project.status === 'Planning') statusClass = 'status-planning';
+                else if (project.status === 'Delayed') statusClass = 'status-delayed';
+                
                 tableHTML += `
                     <tr>
+                        <td>${project.id}</td>
                         <td>${project.projectName}</td>
                         <td>${project.companyName}</td>
                         <td>${project.companyLocation}</td>
                         <td>${project.budget.toFixed(2)}</td>
                         <td>${project.siteLocation}</td>
-                        <td><span class="status ${getStatusClass(project.status)}">${project.status}</span></td>
+                        <td><span class="status ${statusClass}">${project.status}</span></td>
                     </tr>
                 `;
             });
@@ -1070,11 +1020,12 @@ document.getElementById('filter-results').style.display = 'none';
             `;
             
             projectsTableContainer.innerHTML = tableHTML;
+            
+            // Render pagination
+            renderPagination(totalPages);
         }
         
-        function updatePagination() {
-            const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
-            
+        function renderPagination(totalPages) {
             if (totalPages <= 1) {
                 paginationContainer.innerHTML = '';
                 return;
@@ -1084,19 +1035,23 @@ document.getElementById('filter-results').style.display = 'none';
             
             // Previous button
             paginationHTML += `
-                <button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">
+                <button ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">
                     <i class="fas fa-chevron-left"></i>
                 </button>
             `;
             
             // Page numbers
-            const maxPagesToShow = 5;
-            const startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-            const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+            const maxPageButtons = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
+            let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+            
+            if (endPage - startPage + 1 < maxPageButtons) {
+                startPage = Math.max(1, endPage - maxPageButtons + 1);
+            }
             
             for (let i = startPage; i <= endPage; i++) {
                 paginationHTML += `
-                    <button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">
+                    <button class="${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">
                         ${i}
                     </button>
                 `;
@@ -1104,7 +1059,7 @@ document.getElementById('filter-results').style.display = 'none';
             
             // Next button
             paginationHTML += `
-                <button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">
+                <button ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">
                     <i class="fas fa-chevron-right"></i>
                 </button>
             `;
@@ -1112,222 +1067,294 @@ document.getElementById('filter-results').style.display = 'none';
             paginationContainer.innerHTML = paginationHTML;
         }
         
-        function goToPage(page) {
+        function changePage(page) {
             currentPage = page;
             renderProjects();
-            updatePagination();
-            
-            // Scroll to top of projects section
-            document.querySelector('.projects-container').scrollIntoView({ behavior: 'smooth' });
+            // Scroll to the top of the table
+            projectsTableContainer.scrollIntoView({ behavior: 'smooth' });
         }
         
-        // Initialize the app
-        function initApp() {
-    // First check if there's newer data on the server
-    checkForUpdates().then(() => {
-        // If no server data or user declined update, check for local data
-        const savedData = loadProjectsFromLocalStorage();
-        
-        if (savedData && savedData.length > 0) {
-            allProjects = savedData;
-            filteredProjects = [...allProjects];
-            renderProjects();
-            updatePagination();
-            updateStats();
-        }
-    });
-    
-    // Event Listeners
-    resetFiltersBtn.addEventListener('click', resetFilters);
-    applyFiltersBtn.addEventListener('click', applyFilters);
-    loadSampleBtn.addEventListener('click', loadSampleData);
-    excelUpload.addEventListener('change', handleExcelUpload); // This now uses the new override function
-    downloadTemplateBtn.addEventListener('click', downloadTemplate);
-    exportDataBtn.addEventListener('click', exportData);
-    clearDataBtn.addEventListener('click', clearAllData);
-    
-    // Add a new button for loading latest data
-    const loadLatestBtn = document.createElement('button');
-    loadLatestBtn.className = 'btn btn-secondary';
-    loadLatestBtn.innerHTML = '<i class="fas fa-cloud-download-alt"></i> Load Latest Data';
-    loadLatestBtn.addEventListener('click', loadLatestProjectData);
-    document.querySelector('.data-management').appendChild(loadLatestBtn);
-    
-    // Make goToPage function available globally
-    window.goToPage = goToPage;
-}
-        // Supabase configuration
-const SUPABASE_URL = 'https://zlikhwcpjchmjwjqonxs.supabase.co'; // Replace with your Supabase URL
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsaWtod2NwamNobWp3anFvbnhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY0MjczODEsImV4cCI6MjA2MjAwMzM4MX0.ln1FS8SxrTC77u1DOQaMqqg8CUKDJ4r8ipomWAhs2h4'; // Replace with your Supabase anon key
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-// Function to upload Excel file to Supabase
-async function uploadExcelToSupabase(file) {
-    try {
-        showNotification('Uploading file...', 'info');
-        
-        // Upload the file to Supabase Storage
-        const fileName = `project_data_${Date.now()}.xlsx`;
-        const { data: fileData, error: uploadError } = await supabase
-            .storage
-            .from('project-files')
-            .upload(fileName, file);
+        function updateStats() {
+            // Count projects by status
+            const stats = {
+                total: allProjects.length,
+                inProgress: allProjects.filter(p => p.status === 'In Progress').length,
+                completed: allProjects.filter(p => p.status === 'Completed').length,
+                planning: allProjects.filter(p => p.status === 'Planning').length,
+                delayed: allProjects.filter(p => p.status === 'Delayed').length
+            };
             
-        if (uploadError) {
-            throw uploadError;
+            // Update the DOM
+            totalProjectsElement.textContent = stats.total;
+            inProgressElement.textContent = stats.inProgress;
+            completedElement.textContent = stats.completed;
+            planningElement.textContent = stats.planning;
+            delayedElement.textContent = stats.delayed;
         }
         
-        // Get public URL for the file
-        const { data: { publicUrl } } = supabase
-            .storage
-            .from('project-files')
-            .getPublicUrl(fileName);
+        function loadSampleData() {
+            allProjects = [...sampleData];
+            filteredProjects = [...sampleData];
+            saveProjectsToIndexedDB(allProjects)
+                .then(() => {
+                    showNotification('Sample data loaded successfully!');
+                    renderProjects();
+                    updateStats();
+                })
+                .catch(error => {
+                    console.error('Error saving sample data:', error);
+                    showNotification('Error loading sample data. Please try again.', 'error');
+                });
+        }
+        
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
             
-        // Store metadata in the database
-        const { data, error } = await supabase
-            .from('project_files')
-            .insert([
-                { 
-                    file_name: fileName,
-                    file_url: publicUrl,
-                    uploaded_at: new Date(),
-                    is_current: true
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = e.target.result;
+                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    // Process the data
+                    if (jsonData.length > 0) {
+                        processImportedData(jsonData);
+                    } else {
+                        showNotification('No data found in the uploaded file.', 'warning');
+                    }
+                } catch (error) {
+                    console.error('Error processing Excel file:', error);
+                    showNotification('Error processing the file. Please check the format.', 'error');
                 }
-            ]);
+            };
             
-        if (error) {
-            throw error;
+            reader.onerror = function() {
+                showNotification('Error reading the file. Please try again.', 'error');
+            };
+            
+            reader.readAsBinaryString(file);
         }
         
-        // Also store the project data in the database
-        await storeProjectData(allProjects);
-        
-        showNotification('File uploaded successfully!');
-        loadLatestProjectData();
-        
-        return publicUrl;
-    } catch (error) {
-        console.error('Error uploading file:', error);
-        showNotification('Failed to upload file. Please try again.', 'error');
-        return null;
-    }
-}
-
-// Function to store project data in Supabase
-async function storeProjectData(projects) {
-    try {
-        // First, delete existing project data
-        const { error: deleteError } = await supabase
-            .from('projects')
-            .delete()
-            .neq('id', 0); // Delete all records
+        function processImportedData(jsonData) {
+            // Map imported data to our schema
+            const processedData = jsonData.map((item, index) => {
+                return {
+                    id: allProjects.length > 0 ? Math.max(...allProjects.map(p => p.id)) + index + 1 : index + 1,
+                    projectName: item['Project Name'] || item['projectName'] || 'Untitled Project',
+                    companyName: item['Company Name'] || item['companyName'] || 'Unknown Company',
+                    companyLocation: item['Company Location'] || item['companyLocation'] || 'Unknown Location',
+                    budget: parseFloat(item['Budget (Cr ₹)'] || item['budget'] || 0),
+                    siteLocation: item['Site Location'] || item['siteLocation'] || 'Unknown Site',
+                    status: item['Status'] || item['status'] || 'Planning'
+                };
+            });
             
-        // Then insert new projects
-        const { data, error } = await supabase
-            .from('projects')
-            .insert(projects.map(project => ({
-                project_name: project.projectName,
-                company_name: project.companyName,
-                company_location: project.companyLocation,
-                budget: project.budget,
-                site_location: project.siteLocation,
-                status: project.status
-            })));
-            
-        if (error) {
-            throw error;
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Error storing project data:', error);
-        return false;
-    }
-}
-
-// Function to load latest project data from Supabase
-async function loadLatestProjectData() {
-    try {
-        // Get latest file info
-        const { data: fileData, error: fileError } = await supabase
-            .from('project_files')
-            .select('*')
-            .order('uploaded_at', { ascending: false })
-            .limit(1);
-            
-        if (fileError || !fileData || fileData.length === 0) {
-            return false;
-        }
-        
-        // Get projects from the database
-        const { data: projectsData, error: projectsError } = await supabase
-            .from('projects')
-            .select('*');
-            
-        if (projectsError) {
-            throw projectsError;
-        }
-        
-        if (projectsData && projectsData.length > 0) {
-            // Convert the data format to match our expected structure
-            allProjects = projectsData.map((item, index) => ({
-                id: index + 1,
-                projectName: item.project_name,
-                companyName: item.company_name,
-                companyLocation: item.company_location,
-                budget: parseFloat(item.budget) || 0,
-                siteLocation: item.site_location,
-                status: item.status
-            }));
-            
+            // Add to existing projects
+            allProjects = [...allProjects, ...processedData];
             filteredProjects = [...allProjects];
-            currentPage = 1;
-            renderProjects();
-            updatePagination();
-            updateStats();
             
-            showNotification(`Loaded ${allProjects.length} projects from server!`);
-            return true;
+            // Save to storage
+            saveProjectsToIndexedDB(allProjects)
+                .then(() => {
+                    showNotification(`${processedData.length} projects imported successfully!`);
+                    renderProjects();
+                    updateStats();
+                })
+                .catch(error => {
+                    console.error('Error saving imported data:', error);
+                    showNotification('Error saving imported data. Please try again.', 'error');
+                });
         }
         
-        return false;
-    } catch (error) {
-        console.error('Error loading project data:', error);
-        showNotification('Failed to load latest data. Using local data if available.', 'warning');
-        return false;
-    }
-}
-
-// Function to check if there is newer data on the server
-async function checkForUpdates() {
-    try {
-        const { data, error } = await supabase
-            .from('project_files')
-            .select('uploaded_at')
-            .order('uploaded_at', { ascending: false })
-            .limit(1);
+        function downloadTemplate() {
+            // Create a sample template
+            const template = [
+                {
+                    'Project Name': 'Sample Project',
+                    'Company Name': 'Sample Company',
+                    'Company Location': 'City, State',
+                    'Budget (Cr ₹)': 100,
+                    'Site Location': 'Project Site Location',
+                    'Status': 'Planning'
+                }
+            ];
             
-        if (error || !data || data.length === 0) {
-            return;
+            // Convert to worksheet
+            const worksheet = XLSX.utils.json_to_sheet(template);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
+            
+            // Generate Excel file
+            XLSX.writeFile(workbook, 'india_projects_template.xlsx');
         }
         
-        const lastUpdateTime = new Date(data[0].uploaded_at);
-        const lastLocalUpdateTime = localStorage.getItem('lastDataUpdateTime');
-        
-        if (!lastLocalUpdateTime || new Date(lastLocalUpdateTime) < lastUpdateTime) {
-            const shouldUpdate = confirm('New project data is available. Would you like to load the latest data?');
+        function exportData() {
+            if (allProjects.length === 0) {
+                showNotification('No data to export.', 'warning');
+                return;
+            }
             
-            if (shouldUpdate) {
-                loadLatestProjectData();
-                localStorage.setItem('lastDataUpdateTime', lastUpdateTime.toISOString());
+            // Convert to worksheet
+            const worksheet = XLSX.utils.json_to_sheet(allProjects);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Projects');
+            
+            // Generate Excel file
+            XLSX.writeFile(workbook, `india_projects_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+        
+        function clearAllData() {
+            if (confirm('Are you sure you want to delete all projects? This action cannot be undone.')) {
+                allProjects = [];
+                filteredProjects = [];
+                
+                // Clear from storage
+                if (db) {
+                    const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
+                    const store = transaction.objectStore(PROJECTS_STORE);
+                    const request = store.clear();
+                    
+                    request.onsuccess = () => {
+                        localStorage.removeItem('indiaProjectsData');
+                        showNotification('All data has been cleared.');
+                        renderProjects();
+                        updateStats();
+                    };
+                    
+                    request.onerror = event => {
+                        console.error('Error clearing data:', event.target.error);
+                        showNotification('Error clearing data. Please try again.', 'error');
+                    };
+                } else {
+                    localStorage.removeItem('indiaProjectsData');
+                    showNotification('All data has been cleared.');
+                    renderProjects();
+                    updateStats();
+                }
             }
         }
-    } catch (error) {
-        console.error('Error checking for updates:', error);
-    }
-}
-        // Call the initialization function when page loads
-        document.addEventListener('DOMContentLoaded', initApp);
-    </script>
-</body>
-</html>
+        
+        function backupData() {
+            if (allProjects.length === 0) {
+                showNotification('No data to backup.', 'warning');
+                return;
+            }
+            
+            // Create a backup file
+            const dataStr = JSON.stringify(allProjects);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `india_projects_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            showNotification('Backup created successfully!');
+        }
+        
+        function restoreBackup() {
+            restoreUpload.click();
+        }
+        
+        function handleBackupFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const restoredData = JSON.parse(e.target.result);
+                    
+                    if (Array.isArray(restoredData) && restoredData.length > 0) {
+                        allProjects = restoredData;
+                        filteredProjects = [...restoredData];
+                        
+                        // Save to storage
+                        saveProjectsToIndexedDB(allProjects)
+                            .then(() => {
+                                showNotification(`${restoredData.length} projects restored successfully!`);
+                                renderProjects();
+                                updateStats();
+                            })
+                            .catch(error => {
+                                console.error('Error saving restored data:', error);
+                                showNotification('Error restoring backup. Please try again.', 'error');
+                            });
+                    } else {
+                        showNotification('Invalid backup file. No projects found.', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error parsing backup file:', error);
+                    showNotification('Error parsing backup file. Please check the format.', 'error');
+                }
+            };
+            
+            reader.onerror = function() {
+                showNotification('Error reading the backup file. Please try again.', 'error');
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // Initialize App
+        async function initApp() {
+            // Initialize IndexedDB
+            const dbInitialized = await initIndexedDB();
+            
+            // Load saved data
+            const savedProjects = await loadProjectsFromIndexedDB();
+            
+            if (savedProjects && savedProjects.length > 0) {
+                allProjects = savedProjects;
+                filteredProjects = [...savedProjects];
+                renderProjects();
+                updateStats();
+            } else {
+                // Show empty state
+                projectsTableContainer.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <h3>No Projects Found</h3>
+                        <p>Upload an Excel file with project data or click on the sample data button below</p>
+                        <button class="btn btn-primary" id="load-sample">Load Sample Data</button>
+                    </div>
+                `;
+                document.getElementById('load-sample').addEventListener('click', loadSampleData);
+            }
+            
+            // Event Listeners
+            resetFiltersBtn.addEventListener('click', resetFilters);
+            applyFiltersBtn.addEventListener('click', applyFilters);
+            excelUpload.addEventListener('change', handleFileUpload);
+            downloadTemplateBtn.addEventListener('click', downloadTemplate);
+            exportDataBtn.addEventListener('click', exportData);
+            clearDataBtn.addEventListener('click', clearAllData);
+            backupDataBtn.addEventListener('click', backupData);
+            restoreDataBtn.addEventListener('click', restoreBackup);
+            restoreUpload.addEventListener('change', handleBackupFileUpload);
+            
+            // Initialize event delegation for dynamically created elements
+            document.addEventListener('click', function(event) {
+                if (event.target && event.target.id === 'load-sample') {
+                    loadSampleData();
+                }
+            });
+            
+            // Make changePage function global
+            window.changePage = changePage;
+        }
+        
+        // Start the app
+        initApp();
+           
